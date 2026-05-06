@@ -1,0 +1,31 @@
+# ================================================
+# Advanced Gesture Control System - Requirements
+# ================================================
+
+# Core Computer Vision & Hand Tracking
+opencv-python>=4.9.0
+mediapipe==0.10.14        # Eng barqaror versiya
+numpy>=1.26.0
+
+# Mouse & System Automation
+pyautogui>=0.9.54
+pynput>=1.7.0
+
+# Utilities
+screeninfo>=0.8.1
+Pillow>=10.4.0
+
+# Optional (Development & Visualization)
+matplotlib>=3.8.0
+
+# ================================================
+# Platform Specific (izoh sifatida)
+# ================================================
+
+# Windows uchun:
+# pycaw>=20240101
+# pywin32>=306
+# screen-brightness-control>=0.16.0
+
+# Linux (Fedora) uchun:
+# Tizim paketlari: xrandr, amixer (dnf orqali o'rnatiladi)

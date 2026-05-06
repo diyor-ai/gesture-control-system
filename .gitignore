@@ -1,0 +1,15 @@
+# IDE files
+.idea/
+*.iml
+__pycache__/
+*.pyc
+
+# Build and temp folders
+Built/
+Control/
+screenshots/*.png
+*.docx
+
+# Environment
+venv/
+.env
