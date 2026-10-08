@@ -35,7 +35,7 @@ class BrightnessController:
 
     def adjust(self, landmarks: list[tuple], frame: np.ndarray) -> None:
         """Map thumb–ring distance to screen brightness."""
-        d = HandTracker.distance(landmarks[4], landmarks[16])
+        d = HandTracker.normalized_distance(landmarks, 4, 16)   # palm lengths
 
         bri = float(np.clip(np.interp(
             d,

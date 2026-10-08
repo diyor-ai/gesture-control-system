@@ -132,6 +132,20 @@ class HandTracker:
         ))
 
     @staticmethod
+    def hand_scale(landmarks: List[tuple]) -> float:
+        """
+        Hand size in frame units: wrist to middle-finger MCP (palm length).
+        It shrinks as the hand moves away from the camera, so dividing
+        distances by it makes thresholds independent of camera distance.
+        """
+        return max(HandTracker.distance(landmarks[0], landmarks[9]), 1e-6)
+
+    @staticmethod
+    def normalized_distance(landmarks: List[tuple], a: int, b: int) -> float:
+        """Distance between landmarks a and b, in palm lengths."""
+        return HandTracker.distance(landmarks[a], landmarks[b]) / HandTracker.hand_scale(landmarks)
+
+    @staticmethod
     def fingers_up(landmarks: List[tuple]) -> List[bool]:
         """
         Return a boolean list [thumb, index, middle, ring, pinky]

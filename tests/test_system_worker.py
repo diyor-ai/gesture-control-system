@@ -76,6 +76,7 @@ def _volume_controller(monkeypatch):
 
 def _landmarks(distance):
     lm = [(0.0, 0.0, 0.0)] * 21
+    lm[9] = (0.0, 0.2, 0.0)                 # palm length 0.2 -> distance / 0.2 palm lengths
     lm[20] = (distance, 0.0, 0.0)
     return lm
 

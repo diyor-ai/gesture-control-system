@@ -26,6 +26,8 @@ def make_hand(
     pinch: Optional[str] = None,
     wrist_x: float = 0.50,
     mirror: bool = False,
+    scale: float = 1.0,
+    pinch_gap: float = 0.01,
 ) -> Landmarks:
     """
     Build 21 synthetic landmarks.
@@ -35,6 +37,9 @@ def make_hand(
     pinch   : "index" or "middle" – put the thumb tip on that fingertip
     wrist_x : horizontal position of the hand (to simulate swipes)
     mirror  : mirror the hand horizontally (gives a left-hand shape)
+    scale   : hand size around the wrist (0.4 = far from the camera, 1.6 = close)
+    pinch_gap : thumb-to-fingertip gap for `pinch`, in unscaled frame units
+                (the palm is 0.25 long, so 0.03 is a clear pinch and 0.10 is open)
     """
     pts: Dict[int, Tuple[float, float]] = {0: _WRIST}
 
@@ -61,13 +66,15 @@ def make_hand(
 
     if pinch is not None:
         tip = pts[8] if pinch == "index" else pts[12]
-        pts[4] = (tip[0] + 0.01, tip[1])
+        pts[4] = (tip[0] + pinch_gap, tip[1])
         pts[3] = (tip[0] - 0.02, tip[1] + 0.12)
 
     shift = wrist_x - 0.50
     out: Landmarks = []
     for i in range(21):
         x, y = pts[i]
+        x = _WRIST[0] + (x - _WRIST[0]) * scale
+        y = _WRIST[1] + (y - _WRIST[1]) * scale
         x += shift
         if mirror:
             x = 1.0 - x

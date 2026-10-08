@@ -125,6 +125,8 @@ class GestureEngine:
         self.debug[hand_label] = {
             "fingers": fingers, "raw": raw, "stable": state.stable,
             "gesture": gesture, "primary": is_primary,
+            "pinch_index":  HandTracker.normalized_distance(landmarks, 4, 8),
+            "pinch_middle": HandTracker.normalized_distance(landmarks, 4, 12),
         }
         return gesture
 
@@ -175,7 +177,7 @@ class GestureEngine:
     ) -> str:
         """Map finger states to exactly one pose name for this frame."""
         thumb, index, middle, ring, pinky = fingers
-        dist = HandTracker.distance
+        ndist = HandTracker.normalized_distance   # in palm lengths
         others_down = not (middle or ring or pinky)
 
         if thumb and index and middle and ring and pinky:
@@ -195,13 +197,13 @@ class GestureEngine:
 
         if index and others_down:
             if is_primary:
-                if dist(landmarks[4], landmarks[8]) < self._cfg.CLICK_THRESHOLD:
+                if ndist(landmarks, 4, 8) < self._cfg.CLICK_THRESHOLD:
                     return "CLICK"
                 return "DRAW" if canvas_enabled else "MOVE_CURSOR"
             return "ZOOM" if thumb else "IDLE"
 
         if middle and not (index or ring or pinky) and is_primary:
-            if dist(landmarks[4], landmarks[12]) < self._cfg.CLICK_THRESHOLD:
+            if ndist(landmarks, 4, 12) < self._cfg.CLICK_THRESHOLD:
                 return "RIGHT_CLICK"
 
         return "IDLE"

@@ -134,5 +134,7 @@ class UIOverlay:
 
             cv2.putText(frame, f"raw:    {info['raw']}", (x, y + 52), font, 0.50, (220, 220, 220), 1)
             cv2.putText(frame, f"stable: {info['stable']}", (x, y + 74), font, 0.50, (220, 220, 220), 1)
+            cv2.putText(frame, f"pinch idx {info['pinch_index']:.2f}  mid {info['pinch_middle']:.2f}"
+                        f"  (click < {self._cfg.CLICK_THRESHOLD:.2f})", (x, y + 118), font, 0.45, (180, 180, 180), 1)
             cv2.putText(frame, f"gesture: {info['gesture']}", (x, y + 96), font, 0.50,
                         _GESTURE_COLORS.get(info["gesture"], (255, 255, 255)), 1)

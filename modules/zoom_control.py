@@ -18,7 +18,7 @@ class ZoomController:
     def __init__(self, cfg: Config) -> None:
         self._cfg      = cfg
         self._prev_d   = None
-        self._DEADZONE = 0.005
+        self._DEADZONE = 0.025   # palm lengths
 
     def reset(self) -> None:
         """Forget the previous pinch distance (call when the gesture ends)."""
@@ -26,12 +26,12 @@ class ZoomController:
 
     def pinch_zoom(self, landmarks: list[tuple], frame: np.ndarray) -> None:
         """Detect pinch spread/pinch and simulate Ctrl+scroll."""
-        d = HandTracker.distance(landmarks[4], landmarks[8])
+        d = HandTracker.normalized_distance(landmarks, 4, 8)   # palm lengths
 
         if self._prev_d is not None:
             delta = d - self._prev_d
             if abs(delta) > self._DEADZONE:
-                clicks = int(delta * 30)
+                clicks = int(delta * 6)
                 pyautogui.keyDown("ctrl")
                 pyautogui.scroll(clicks)
                 pyautogui.keyUp("ctrl")

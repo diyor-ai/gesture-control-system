@@ -40,17 +40,18 @@ class Config:
     CURSOR_SPEED_MULTIPLIER = 1.5
 
     # ── Gesture thresholds ────────────────────────────────────────────────────
-    CLICK_THRESHOLD        = 0.04          # normalised distance between tips
+    # Distances below are in palm lengths (wrist -> middle MCP), so they hold at any camera distance
+    CLICK_THRESHOLD        = 0.20          # max thumb-to-fingertip distance for a pinch
     DOUBLE_CLICK_INTERVAL  = 0.40          # max seconds between two pinch starts (<= OS double-click time)
     DRAW_MODE_DISTANCE     = 0.05          # index–middle gap to enter draw mode
     SCREENSHOT_HOLD_TIME   = 1.0           # seconds gesture must be held
     PLAY_PAUSE_HOLD_TIME   = 0.5           # seconds the 3-finger pose must be held
 
     # ── Volume / Brightness ───────────────────────────────────────────────────
-    VOLUME_MIN_DIST        = 0.02
-    VOLUME_MAX_DIST        = 0.35
-    BRIGHTNESS_MIN_DIST    = 0.02
-    BRIGHTNESS_MAX_DIST    = 0.35
+    VOLUME_MIN_DIST        = 0.10          # thumb-pinky spread (palm lengths) = 0 %
+    VOLUME_MAX_DIST        = 1.60          # ... = 100 %
+    BRIGHTNESS_MIN_DIST    = 0.10          # thumb-ring spread (palm lengths) = min
+    BRIGHTNESS_MAX_DIST    = 1.30          # ... = max
     VOLUME_STEP            = 0.03          # min change (0–1) before the mixer is touched
     BRIGHTNESS_STEP        = 0.03          # min change (0–1) before the display is touched
 

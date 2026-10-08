@@ -56,7 +56,7 @@ class VolumeController:
         thumb_tip = landmarks[4]
         pinky_tip = landmarks[20]
 
-        d = HandTracker.distance(thumb_tip, pinky_tip)
+        d = HandTracker.normalized_distance(landmarks, 4, 20)   # palm lengths
 
         # Normalise distance to 0–1
         vol_norm = np.interp(
