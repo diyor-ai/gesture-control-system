@@ -16,8 +16,16 @@ class DrawingCanvas:
     def __init__(self, cfg: Config) -> None:
         self._cfg     = cfg
         self._enabled = False
+        # Sized from the first real camera frame (the camera may not honour the
+        # requested resolution), see _fit().
         self._canvas  = np.zeros((cfg.FRAME_HEIGHT, cfg.FRAME_WIDTH, 3), dtype=np.uint8)
         self._prev_pt = None
+
+    def _fit(self, frame: np.ndarray) -> None:
+        """Re-create the canvas if its size differs from the camera frame's."""
+        if self._canvas.shape[:2] != frame.shape[:2]:
+            self._canvas  = np.zeros(frame.shape, dtype=np.uint8)
+            self._prev_pt = None
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -37,6 +45,7 @@ class DrawingCanvas:
         if not self._enabled:
             return
 
+        self._fit(frame)
         h, w = frame.shape[:2]
         ix = int(landmarks[8][0] * w)
         iy = int(landmarks[8][1] * h)
@@ -59,6 +68,7 @@ class DrawingCanvas:
 
     def render(self, frame: np.ndarray) -> np.ndarray:
         """Blend the canvas layer onto the camera frame."""
+        self._fit(frame)
         if not np.any(self._canvas):
             return frame
         # Wherever the canvas has non-zero pixels, overlay them
