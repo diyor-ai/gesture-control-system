@@ -33,6 +33,9 @@ from modules.config import Config
 from modules.input_backend import InputBackendError, create_backend
 
 
+WINDOW_NAME = "Gesture Control System"
+
+
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Advanced Gesture Control System")
     parser.add_argument(
@@ -59,6 +62,9 @@ def main(debug: bool = False) -> None:
     if not cap.isOpened():
         print("[ERROR] Cannot open camera. Check CAMERA_INDEX in config.py.")
         sys.exit(1)
+
+    # WINDOW_GUI_NORMAL drops OpenCV's Qt toolbar and status bar (camera view + HUD only)
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
 
     # ── Input injection (uinput on Wayland, PyAutoGUI elsewhere) ─────────────
     try:
@@ -204,7 +210,7 @@ def main(debug: bool = False) -> None:
             if debug:
                 overlay.draw_debug(frame, engine.debug, fps, avg_fps)
 
-            cv2.imshow("Gesture Control System", frame)
+            cv2.imshow(WINDOW_NAME, frame)
 
             # ── Keyboard shortcuts ────────────────────────────────────────────────
             key = cv2.waitKey(1) & 0xFF

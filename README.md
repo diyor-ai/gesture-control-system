@@ -11,7 +11,7 @@ Control your computer with hand gestures: a webcam goes in, mouse, scroll, volum
 - **Distances in palm lengths.** Pinch, volume, brightness, zoom, scroll and swipe thresholds are divided by the wrist-to-middle-finger-base length, so they behave the same near and far from the camera.
 - **Works on Wayland.** Input is injected through a virtual absolute pointer (`uinput` via python-evdev) with the position mapped to the detected screen size. PyAutoGUI is used on X11, Windows and macOS.
 - **Slow OS calls never block the camera loop.** Volume and brightness changes pass a 3 % step filter, then run on a background worker that keeps only the newest value.
-- **174 pytest tests, no camera needed.** They run in about 1.6 s against synthetic hand landmarks, a fake clock and a fake uinput device.
+- **189 pytest tests, no camera needed.** They run in about 1.6 s against synthetic hand landmarks, a fake clock and a fake uinput device.
 - **Measured performance.** Camera plus tracking runs at 29.9 FPS with a hand in view (camera limit 30.1), up from 16.5–21.6 FPS with the first settings.
 
 ## Quick start
