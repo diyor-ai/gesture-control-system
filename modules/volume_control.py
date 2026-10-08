@@ -16,6 +16,7 @@ import subprocess
 import numpy as np
 import cv2
 from modules.config import Config
+from modules import linux_backends
 from modules.hand_tracker import HandTracker
 from modules.system_worker import LatestValueWorker, StepGate
 
@@ -85,14 +86,7 @@ class VolumeController:
             # pycaw: set scalar volume directly
             self._win_vol_ctrl.SetMasterVolumeLevelScalar(vol_norm, None)
         elif self._platform == "Linux":
-            pct = int(vol_norm * 100)
-            try:
-                subprocess.run(
-                    ["amixer", "-D", "pulse", "sset", "Master", f"{pct}%"],
-                    capture_output=True, check=False, timeout=2,
-                )
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                pass  # amixer not available
+            linux_backends.set_volume(vol_norm)
         elif self._platform == "Darwin":
             pct = int(vol_norm * 100)
             subprocess.run(

@@ -14,6 +14,7 @@ import subprocess
 import numpy as np
 import cv2
 from modules.config import Config
+from modules import linux_backends
 from modules.hand_tracker import HandTracker
 from modules.system_worker import LatestValueWorker, StepGate
 
@@ -68,13 +69,7 @@ class BrightnessController:
             except ImportError:
                 pass
         elif self._platform == "Linux":
-            try:
-                subprocess.run(
-                    ["xrandr", "--output", "eDP-1", "--brightness", f"{bri:.2f}"],
-                    capture_output=True, check=False, timeout=2,
-                )
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                pass
+            linux_backends.set_brightness(bri)
         elif self._platform == "Darwin":
             # AppleScript brightness: 0.0–1.0
             subprocess.run(

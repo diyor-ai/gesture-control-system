@@ -6,13 +6,9 @@ All tunable parameters live here so every module stays in sync.
 
 
 def _get_screen_resolution() -> tuple[int, int]:
-    """Return (width, height) of the primary monitor."""
-    try:
-        import screeninfo  # imported lazily so the config loads without a display stack
-        monitor = screeninfo.get_monitors()[0]
-        return monitor.width, monitor.height
-    except Exception:
-        return 1920, 1080  # safe fallback
+    """Return (width, height) of the primary monitor (Wayland-safe)."""
+    from modules.linux_backends import screen_size
+    return screen_size()
 
 
 class Config:
