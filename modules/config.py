@@ -57,6 +57,8 @@ class Config:
     VOLUME_MAX_DIST        = 0.35
     BRIGHTNESS_MIN_DIST    = 0.02
     BRIGHTNESS_MAX_DIST    = 0.35
+    VOLUME_STEP            = 0.03          # min change (0–1) before the mixer is touched
+    BRIGHTNESS_STEP        = 0.03          # min change (0–1) before the display is touched
 
     # ── Drawing canvas ────────────────────────────────────────────────────────
     DRAW_COLOR             = (0, 255, 180)  # neon-green

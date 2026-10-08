@@ -17,6 +17,7 @@ import numpy as np
 import cv2
 from modules.config import Config
 from modules.hand_tracker import HandTracker
+from modules.system_worker import LatestValueWorker, StepGate
 
 
 class VolumeController:
@@ -26,6 +27,10 @@ class VolumeController:
         self._cfg      = cfg
         self._platform = platform.system()
         self._volume   = 0.5   # cached normalised volume (0–1)
+
+        # Only touch the system mixer on meaningful changes, off the main loop
+        self._gate   = StepGate(cfg.VOLUME_STEP)
+        self._worker = LatestValueWorker(self._set_system_volume, name="volume")
 
         # Windows: set up pycaw if available
         self._win_vol_ctrl = None
@@ -61,8 +66,16 @@ class VolumeController:
         vol_norm = float(np.clip(vol_norm, 0.0, 1.0))
         self._volume = vol_norm
 
-        self._set_system_volume(vol_norm)
+        if self._gate.accept(vol_norm):
+            if self._win_vol_ctrl:
+                self._set_system_volume(vol_norm)   # pycaw is a cheap COM call (and thread-bound)
+            else:
+                self._worker.submit(vol_norm)
         self._draw_bar(frame, vol_norm, label="VOL")
+
+    def close(self) -> None:
+        """Stop the background worker (call on shutdown)."""
+        self._worker.close()
 
     # ── Private helpers ────────────────────────────────────────────────────────
 
@@ -76,15 +89,15 @@ class VolumeController:
             try:
                 subprocess.run(
                     ["amixer", "-D", "pulse", "sset", "Master", f"{pct}%"],
-                    capture_output=True, check=False,
+                    capture_output=True, check=False, timeout=2,
                 )
-            except FileNotFoundError:
+            except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass  # amixer not available
         elif self._platform == "Darwin":
             pct = int(vol_norm * 100)
             subprocess.run(
                 ["osascript", "-e", f"set volume output volume {pct}"],
-                capture_output=True, check=False,
+                capture_output=True, check=False, timeout=2,
             )
 
     def _draw_bar(

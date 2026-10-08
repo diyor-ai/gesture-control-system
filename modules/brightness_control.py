@@ -15,6 +15,7 @@ import numpy as np
 import cv2
 from modules.config import Config
 from modules.hand_tracker import HandTracker
+from modules.system_worker import LatestValueWorker, StepGate
 
 
 class BrightnessController:
@@ -22,6 +23,14 @@ class BrightnessController:
         self._cfg      = cfg
         self._platform = platform.system()
         self._level    = 0.5   # cached 0–1
+
+        # Only touch the display on meaningful changes, off the main loop
+        self._gate   = StepGate(cfg.BRIGHTNESS_STEP)
+        self._worker = LatestValueWorker(self._set_brightness, name="brightness")
+
+    def close(self) -> None:
+        """Stop the background worker (call on shutdown)."""
+        self._worker.close()
 
     def adjust(self, landmarks: list[tuple], frame: np.ndarray) -> None:
         """Map thumb–ring distance to screen brightness."""
@@ -34,7 +43,8 @@ class BrightnessController:
         ), 0.0, 1.0))
 
         self._level = bri
-        self._set_brightness(bri)
+        if self._gate.accept(bri):
+            self._worker.submit(bri)
 
         # Reuse volume bar renderer
         h = frame.shape[0]
@@ -61,9 +71,9 @@ class BrightnessController:
             try:
                 subprocess.run(
                     ["xrandr", "--output", "eDP-1", "--brightness", f"{bri:.2f}"],
-                    capture_output=True, check=False,
+                    capture_output=True, check=False, timeout=2,
                 )
-            except FileNotFoundError:
+            except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass
         elif self._platform == "Darwin":
             # AppleScript brightness: 0.0–1.0
