@@ -1,192 +1,133 @@
-# 🖐️ Advanced Gesture-Based Computer Control System
+# Gesture Control System
 
-> Control your computer entirely through natural hand gestures — no mouse, no keyboard.  
-> Built with Python · MediaPipe · OpenCV · PyAutoGUI
+Control your computer with hand gestures: a webcam goes in, mouse, scroll, volume and media control come out. Python, MediaPipe, OpenCV.
 
----
+<!-- demo.gif goes here -->
 
-## 📋 Table of Contents
+## Highlights
 
-- [Overview](#-overview)
-- [Feature Matrix](#-feature-matrix)
-- [System Architecture](#-system-architecture)
-- [Gesture Reference](#-gesture-reference)
-- [Installation](#-installation)
-- [Wayland setup](#-wayland-setup-linux)
-- [Usage](#-usage)
-- [Project Structure](#-project-structure)
-- [Configuration](#️-configuration)
-- [Performance](#-performance)
-- [Troubleshooting](#-troubleshooting)
-- [Demo](#-demo)
-- [Future Improvements](#-future-improvements)
-- [References](#-references)
+- **Edge-triggered clicks.** A pinch fires one click when it starts and must be released before the next. A double click is two separate pinches within 0.40 s.
+- **Per-hand stability layer.** A pose must be seen on 3 consecutive frames (about 100 ms at 30 FPS) before it activates, so detector flicker cannot fire or re-arm gestures. Each hand keeps its own state, and a 5-frame grace period rides out tracking dropouts.
+- **Distances in palm lengths.** Pinch, volume, brightness, zoom, scroll and swipe thresholds are divided by the wrist-to-middle-finger-base length, so they behave the same near and far from the camera.
+- **Works on Wayland.** Input is injected through a virtual absolute pointer (`uinput` via python-evdev) with the position mapped to the detected screen size. PyAutoGUI is used on X11, Windows and macOS.
+- **Slow OS calls never block the camera loop.** Volume and brightness changes pass a 3 % step filter, then run on a background worker that keeps only the newest value.
+- **174 pytest tests, no camera needed.** They run in about 1.6 s against synthetic hand landmarks, a fake clock and a fake uinput device.
+- **Measured performance.** Camera plus tracking runs at 29.9 FPS with a hand in view (camera limit 30.1), up from 16.5–21.6 FPS with the first settings.
 
----
-
-## 🔍 Overview
-
-This project delivers a **real-time, gesture-driven computer interaction system** that uses a standard webcam to replace traditional mouse and keyboard input. It tracks hand landmarks in real time (≈ 30 FPS, limited by the webcam – see [Performance](#-performance)) using Google's MediaPipe framework and dispatches recognised gestures to dedicated modules for cursor control, volume, scrolling, drawing, screenshots, window management, zoom, media playback, and screen brightness.
-
-| Metric | Value |
-|--------|-------|
-| Measured FPS | ≈ 30 (camera-limited), see Performance |
-| Detected hands | Up to 2 simultaneous |
-| Total gestures | 14 distinct actions |
-| Lines of code | ~2 000 (+ ~1 100 lines of tests) |
-| Supported OS | Windows · macOS · Linux |
-
----
-
-## ✅ Feature Matrix
-
-| # | Feature | Gesture | Status |
-|---|---------|---------|--------|
-| 1 | **Cursor Movement** | Index finger extended | ✅ Core |
-| 2 | **Single Click** | Index + Thumb pinch | ✅ Core |
-| 3 | **Double Click** | Two separate pinches within 0.40 s | ✅ Core |
-| 4 | **Right Click** | Middle + Thumb pinch | ✅ Core |
-| 5 | **Volume Control** | Thumb + Pinky spread 🤙 | ✅ Mandatory |
-| 6 | **Screen Scrolling** | Peace sign ✌ + wrist movement | ✅ Mandatory |
-| 7 | **Finger Drawing** | Index only, canvas mode | ✅ Mandatory |
-| 8 | **Screenshot** | All 5 fingers up (hold 1 s) | ✅ Mandatory |
-| 9 | **Window Movement** | Closed fist drag | ⚠️ Windows/macOS only – not available on Linux |
-| 10 | **Zoom In/Out** | Secondary hand L-shape, thumb–index spread | ✅ Mandatory |
-| 11 | **Media Play/Pause** | Index + middle + ring up (hold 0.5 s) | ✅ Mandatory |
-| 12 | **Media Next/Prev** | Index + Pinky 🤘, swipe right / left | ✅ Mandatory |
-| 13 | **Brightness Control** | Thumb + Ring spread | ✅ Advanced |
-| 14 | **Hand-Loss Recovery** | Automatic freeze on hand loss | ✅ Advanced |
-| 15 | **Multi-Hand Support** | Up to 2 hands; primary hand = cursor, other = zoom | ✅ Advanced |
-| 16 | **Real-time HUD** | FPS · mode · shortcuts overlay | ✅ Advanced |
-
----
-
-## 🏗️ System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         main.py (Event Loop)                        │
-│  Camera → Flip → HandTracker → GestureEngine → Module Dispatch      │
-└───────────────────┬─────────────────────────────────────────────────┘
-                    │
-        ┌───────────▼────────────┐
-        │     HandTracker        │  MediaPipe Hands
-        │  (landmark extraction) │  21 keypoints per hand
-        └───────────┬────────────┘
-                    │ landmarks[]
-        ┌───────────▼────────────┐
-        │    GestureEngine       │  Rule-based classifier
-        │  (stateful classifier) │  + timing logic
-        └───────────┬────────────┘
-                    │ gesture string
-          ┌─────────┼──────────────────────────────┐
-          ▼         ▼         ▼                     ▼
-   CursorController  VolumeController  ScrollController  …(9 more)
-          │
-     PyAutoGUI → OS input events
-```
-
-Each module is **independent and stateless-by-design** — the engine calls only the module that matches the current gesture, making the system easy to extend.
-
----
-
-## 🤚 Gesture Reference
-
-Every gesture has its own pose. `T I M R P` = thumb, index, middle, ring, pinky; "any" = not checked.
-A pose must be seen for 3 consecutive frames (`STABILITY_FRAMES`) before it activates.
-
-**Primary hand** (`PRIMARY_HAND`, default **Right**) – the only hand that drives the cursor
-
-| Gesture | Pose | Behaviour |
-|---------|------|-----------|
-| Move cursor | ☝️ Index up, M R P down, thumb any (L-shape is fine) | Fingertip → screen, smoothed |
-| Click | Same pose, thumb tip pinched onto index tip | **One** click when the pinch starts; release before the next |
-| Double click | Two separate pinches within 0.40 s (`DOUBLE_CLICK_INTERVAL`) | Second pinch completes the double click |
-| Right click | Only middle up, thumb tip pinched onto middle tip | One click per pinch |
-| Draw | ☝️ Index pose while the canvas is on (`d`) | Replaces MOVE_CURSOR while drawing |
-
-**Secondary hand** (the other one)
-
-| Gesture | Pose | Behaviour |
-|---------|------|-----------|
-| Zoom | 👆 L-shape: thumb + index up, M R P down | Thumb–index spread → Ctrl + scroll |
-
-**Either hand**
-
-| Gesture | Pose | Behaviour |
-|---------|------|-----------|
-| Scroll | ✌️ Index + middle up, R P down | Wrist Y movement drives direction |
-| Volume | 🤙 Thumb + pinky up, I M R down | Thumb–pinky distance = volume % |
-| Brightness | Thumb + ring up, I M P down | Thumb–ring distance = brightness % |
-| Play/Pause | 🤟 Index + middle + ring up, pinky down | Hold 0.5 s → fires once |
-| Next track | 🤘 Index + pinky up, M R down, swipe **right** | One event per swipe (1 s cooldown) |
-| Previous track | 🤘 Same pose, swipe **left** | One event per swipe |
-| Screenshot | 🖐 All five fingers up | Hold 1 s → fires once, release to re-arm |
-
-> **Drag window (✊ fist) is Windows/macOS only.** It is not implemented on Linux, so there the fist
-> does nothing and is not listed above (`Config.WINDOW_DRAG_ENABLED`). Moving foreign windows is not possible
-> from a normal Wayland client; it would need a compositor-specific extension.
-
-Pinch, volume, brightness and zoom distances are measured in **palm lengths** (wrist → middle-finger base),
-so they work at any distance from the camera. Run with `--debug` to see the live values.
-
-Event gestures (clicks, play/pause, swipes, screenshot) fire once; the rest repeat every frame while held.
-If the hand disappears for up to 5 frames (`HAND_LOSS_GRACE_FRAMES`) nothing is reset; longer and all gesture state is cleared.
-
----
-
-## 💻 Installation
-
-### Prerequisites
-
-- Python 3.9 – 3.12 (MediaPipe 0.10.14 has no wheels for 3.13+); 3.11 recommended
-- Conda (recommended)
-- Webcam
-
-### Step 1 – Create the Conda environment
+## Quick start
 
 ```bash
-conda create -n gesture311 python=3.11 -y
-conda activate gesture311
-```
-
-### Step 2 – Install dependencies
-
-```bash
+conda create -n gesture311 python=3.11 -y && conda activate gesture311
 pip install -r requirements.txt
-python -c "import mediapipe; print(mediapipe.__version__)"   # expect 0.10.14
+python main.py            # q quit · d toggle drawing · r clear canvas
+python main.py --debug    # finger states, raw/stable pose, pinch ratios, FPS
 ```
 
-### Step 3 – Platform-specific extras
+Python 3.11 is what I develop on; MediaPipe 0.10.14 supports 3.9–3.12. On Linux/Wayland, do the one-time [Wayland setup](#wayland-setup-linux) first.
 
-**Windows (volume + window movement):**
+## Gestures
+
+`T I M R P` = thumb, index, middle, ring, pinky. The **primary hand** (`PRIMARY_HAND`, default Right) drives the cursor; the other hand gets zoom.
+
+| Gesture | Hand | Pose | Behaviour |
+|---------|------|------|-----------|
+| Move cursor | primary | Index up, M R P down, thumb free | Fingertip mapped to the screen, smoothed |
+| Click | primary | Same pose, thumb tip pinched onto index tip | One click per pinch |
+| Double click | primary | Two pinches within 0.40 s | Second pinch completes the double click |
+| Right click | primary | Only middle up, thumb pinched onto middle tip | One click per pinch |
+| Draw | primary | Index pose while the canvas is on (`d`) | Draws on the camera overlay |
+| Zoom | other | Thumb + index up, M R P down (L shape) | Thumb–index spread sends Ctrl + scroll |
+| Scroll | either | Index + middle up, R P down | Wrist up/down movement |
+| Volume | either | Thumb + pinky up, I M R down | Thumb–pinky spread = 0–100 % |
+| Brightness | either | Thumb + ring up, I M P down | Thumb–ring spread = min–max |
+| Play / pause | either | Index + middle + ring up, pinky down | Hold 0.5 s, fires once |
+| Next / previous track | either | Index + pinky up, M R down, swipe right / left | One event per swipe, 1 s cooldown |
+| Screenshot | either | All five fingers up | Hold 1 s, fires once, saved to `screenshots/` |
+
+Fist drags the active window on Windows and macOS only; it is disabled on Linux (`WINDOW_DRAG_ENABLED`).
+
+## Architecture
+
+```
+Camera ─► read_frame (bounded retries) ─► flip
+            │
+            ▼
+      HandTracker (MediaPipe Hands, 21 landmarks per hand)
+            │  landmarks + Left/Right label
+            ▼
+      GestureEngine ── per hand: finger states ─► raw pose ─► stability layer ─► gesture
+            │                    (palm-length distances)     (N frames, grace period)
+            ▼
+      Dispatcher (main.py) ─► CursorController · ScrollController · ZoomController
+            │                  MediaController · ScreenshotModule · DrawingCanvas
+            │                  VolumeController / BrightnessController ─► background worker
+            ▼
+      input_backend ─► UInputBackend (Wayland, kernel uinput)
+                    └► PyAutoGUIBackend (X11, Windows, macOS)
+```
+
+The engine is a classifier with state, not a stateless function: it keeps timers, pinch latches and swipe history per hand. `ui_overlay` draws the HUD and the `--debug` panel on the frame.
+
+## Engineering notes
+
+| Problem | Fix |
+|---------|-----|
+| Clicks fired on every frame while pinching (about 30/s) | Event gestures are edge-triggered; a held pose fires once |
+| Play/pause was unreachable (the 5-finger screenshot rule shadowed it) | Every gesture has its own pose; play/pause is a 3-finger hold |
+| Thumb + index triggered zoom when the user only wanted the cursor | Zoom moved to the other hand; the L shape is cursor/click on the primary hand |
+| Thumb detection compared x coordinates and broke on the right hand | Compare tip and IP distance to the pinky base, which is handedness-independent |
+| Both hands moved the same cursor and shared timers | Cursor gestures belong to one primary hand; engine state is per hand |
+| `amixer`/`xrandr` subprocesses blocked the loop on every frame | Step filter plus a coalescing background worker with a 2 s timeout |
+| Swipe direction was inverted (the frame is already mirrored) | Fixed and covered by a test |
+| Drawing crashed because the camera ignored the 1280×720 request | The canvas is sized from the first real frame |
+| Pointer injection silently did nothing on Wayland | Virtual absolute pointer through uinput |
+| A double click would have sent three clicks | The second pinch sends one extra click inside the OS double-click time |
+
+## Performance
+
+Measured with `tools/benchmark_fps.py` (real webcam and MediaPipe, no window, no input injection) on Fedora 44, CPU only, with a hand in view. The webcam delivers 640×480 at 30 FPS and ignores a 1280×720 request.
+
+| Setting | Camera + tracking FPS |
+|---------|-----------------------|
+| 1280×720 requested, `MODEL_COMPLEXITY = 1` | 16.5 – 21.6 |
+| 640×480, `MODEL_COMPLEXITY = 0` (current defaults) | 29.9 |
+| Camera alone | 30.1 |
+
+Runs vary by about ±3 FPS. The full application (window, HUD, input injection) has not been benchmarked.
+
+## Testing
+
 ```bash
-pip install pycaw pywin32
+pip install -r requirements-dev.txt
+pytest                      # 174 tests in 12 files, about 1.6 s, no camera or display
 ```
 
-**Linux (Fedora):**
-```bash
-sudo dnf install wireplumber brightnessctl     # wpctl (volume) and brightness
-```
-Volume: `wpctl` → `pactl` → `amixer`. Brightness: `brightnessctl` → `xrandr` (software gamma, X11 only).
-Screen size is auto-detected; override with `GESTURE_SCREEN=2560x1440 python main.py`.
+They cover every gesture pose on both hands, click edge-triggering, stability and hand-loss behaviour, hand-size invariance (0.4× to 1.6×), the uinput event stream, Linux backend fallbacks, camera retries, canvas sizing and the debug overlay. Manual checks: `tools/uinput_selftest.py` (moves the pointer after asking) and `tools/benchmark_fps.py`.
 
-> **Wayland (GNOME on Fedora 44 has no Xorg session):** PyAutoGUI cannot move the pointer there, so the app
-> injects input through the kernel's uinput instead – see [Wayland setup](#-wayland-setup-linux) below.
+## Configuration
 
-**Windows (brightness):**
-```bash
-pip install screen-brightness-control
-```
+Everything is in `modules/config.py`. Distances are in palm lengths.
 
----
+| Setting | Value | Meaning |
+|---------|-------|---------|
+| `PRIMARY_HAND` | `"Right"` | Hand for cursor, clicks, drawing |
+| `STABILITY_FRAMES` | 3 | Frames a pose must persist to activate |
+| `HAND_LOSS_GRACE_FRAMES` | 5 | Dropout frames tolerated before state resets |
+| `CLICK_THRESHOLD` | 0.20 | Maximum thumb-to-fingertip distance for a pinch |
+| `DOUBLE_CLICK_INTERVAL` | 0.40 s | Maximum time between two pinch starts |
+| `SCREENSHOT_HOLD_TIME` / `PLAY_PAUSE_HOLD_TIME` | 1.0 s / 0.5 s | Hold time before firing |
+| `VOLUME_MIN_DIST` / `MAX_DIST` | 0.10 / 1.60 | Thumb–pinky spread mapped to 0–100 % |
+| `BRIGHTNESS_MIN_DIST` / `MAX_DIST` | 0.10 / 1.30 | Thumb–ring spread mapped to min–max |
+| `VOLUME_STEP` / `BRIGHTNESS_STEP` | 0.03 | Minimum change before the OS is touched |
+| `SMOOTHING_FACTOR` / `CONTROL_ZONE_MARGIN` | 0.30 / 0.15 | Cursor smoothing, ignored frame border |
+| `FRAME_WIDTH` × `FRAME_HEIGHT` | 640 × 480 | Requested camera size |
+| `MODEL_COMPLEXITY` | 0 | MediaPipe landmark model (0 fast, 1 accurate) |
+| `DETECTION_CONFIDENCE` / `TRACKING_CONFIDENCE` | 0.75 / 0.75 | MediaPipe thresholds |
+| `INPUT_BACKEND` | `"auto"` | `auto`, `uinput` or `pyautogui` (or `$GESTURE_INPUT`) |
 
-## 🐧 Wayland setup (Linux)
+## Wayland setup (Linux)
 
-On Wayland the app creates a virtual *absolute* pointing device through `/dev/uinput` (python-evdev) and maps
-the hand position to the detected screen size. That needs read/write access to `/dev/uinput`.
-**Do not add yourself to the `input` group** – that would let every program you run read your keyboard.
-Use a dedicated `uinput` group that only owns `/dev/uinput`. Run these once yourself:
+PyAutoGUI cannot move the pointer on native Wayland (measured on Fedora 44 / GNOME 50). The app instead creates a virtual absolute pointer through `/dev/uinput`, which needs access to that device. **Do not add yourself to the `input` group**: it would let every program you run read your keyboard. A dedicated `uinput` group that only owns `/dev/uinput` is enough. Run once:
 
 ```bash
 sudo groupadd --system uinput
@@ -196,169 +137,39 @@ sudo cp linux/uinput.conf /etc/modules-load.d/gesture-uinput.conf
 sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=uinput
 sudo modprobe uinput
-sudo dnf install gnome-screenshot brightnessctl     # screenshots + brightness
+sudo dnf install gnome-screenshot brightnessctl     # screenshots and brightness
 ```
 
-Then **log out and back in** (group membership is read at login) and check:
+Log out and back in, then check:
 
 ```bash
-id -nG | tr ' ' '\n' | grep -x uinput      # prints "uinput"
-ls -l /dev/uinput                            # crw-rw---- root uinput
-python tools/uinput_selftest.py              # asks first, then moves the pointer in a square (no clicks)
+id -nG | tr ' ' '\n' | grep -x uinput     # prints "uinput"
+python tools/uinput_selftest.py           # asks first, then draws a square with the pointer (no clicks)
 ```
 
-Trade-off: any process running as a member of `uinput` can inject mouse/keyboard events (it can *not* read
-them). Remove the setup with `sudo gpasswd -d "$USER" uinput` and `sudo rm /etc/udev/rules.d/99-gesture-uinput.rules`.
+Members of `uinput` can inject input events but cannot read them. To undo: `sudo gpasswd -d "$USER" uinput` and `sudo rm /etc/udev/rules.d/99-gesture-uinput.rules`. With `auto`, the app falls back to PyAutoGUI and prints a warning if `/dev/uinput` is not accessible. Volume uses `wpctl`, then `pactl`, then `amixer`; brightness uses `brightnessctl`, then `xrandr`. Override screen detection with `GESTURE_SCREEN=2560x1440`.
 
-Backend choice: `INPUT_BACKEND` in `config.py` or `GESTURE_INPUT=uinput|pyautogui|auto`. `auto` uses uinput on
-Wayland and falls back to PyAutoGUI (with a warning) if `/dev/uinput` is not accessible.
+## Troubleshooting
 
----
+- **Camera not found / "no frames" error:** the app gives up after 30 failed reads (about 3 s). Try another `CAMERA_INDEX`.
+- **Pointer does not move on Wayland:** the start-up line should read `Input backend: uinput`. If it says `pyautogui`, redo the Wayland setup and log in again.
+- **Screenshot fails:** install `gnome-screenshot`.
+- **Brightness has no effect:** install `brightnessctl`; the `xrandr` fallback is unlikely to work on Wayland.
+- **Cursor stops or clicks land on the wrong hand:** MediaPipe's Left/Right label can flip; check it with `--debug` or change `PRIMARY_HAND`.
+- **Low FPS:** run `python tools/benchmark_fps.py` to separate camera and tracking cost.
 
-## 🚀 Usage
+## Limitations
 
-```bash
-conda activate gesture311
-python main.py
-```
+- Tested only on Fedora 44 with GNOME on Wayland. The Windows (pycaw, win32) and macOS (AppleScript) code paths exist but have never been run.
+- No accuracy measurement yet; the engine is rule-based and thresholds were tuned by hand.
+- Window drag is not available on Linux.
+- The full application loop has not been benchmarked, and the gesture-to-pointer path on real hardware is verified only after the uinput setup above.
+- One webcam, one user; Left/Right labels come from MediaPipe and can occasionally flip.
 
-| Key | Action |
-|-----|--------|
-| `q` | Quit the application |
-| `d` | Toggle drawing canvas on/off |
-| `r` | Clear the drawing canvas |
+## Roadmap
 
-```bash
-python main.py --debug     # overlay: finger states, raw/stable pose, gesture, FPS
-```
+- Trained ML gesture classifier with an accuracy benchmark against the rule-based engine
+- Presentation mode (slide control)
+- Browser demo
 
-### Tests
-
-```bash
-pip install -r requirements-dev.txt
-pytest                     # no camera needed – uses synthetic landmarks
-```
-
-The HUD in the top bar shows the current FPS and active gesture mode in real time.
-
----
-
-## 📁 Project Structure
-
-```
-gesture_control/
-├── main.py                  # Entry point – camera loop & module orchestration
-├── requirements.txt         # Python dependencies
-├── requirements-dev.txt     # + pytest
-├── tests/                   # Unit tests (synthetic landmarks, fake input device)
-├── tools/                   # benchmark_fps.py, uinput_selftest.py (manual)
-├── linux/                   # udev rule + modules-load file for the uinput group
-├── screenshots/             # Auto-created; screenshot captures saved here
-└── modules/
-    ├── __init__.py
-    ├── config.py            # All tuneable parameters in one place
-    ├── hand_tracker.py      # MediaPipe Hands wrapper
-    ├── gesture_engine.py    # Per-hand, debounced gesture classifier
-    ├── camera.py            # Frame reading with a bounded retry budget
-    ├── system_worker.py     # Step filter + background worker for volume/brightness
-    ├── cursor_controller.py # Smooth cursor + click actions
-    ├── volume_control.py    # System volume via thumb–pinky distance
-    ├── scroll_control.py    # Page scrolling via wrist velocity
-    ├── drawing_canvas.py    # Virtual finger-drawing overlay
-    ├── screenshot.py        # Full-screen capture with debounce
-    ├── window_mover.py      # Active window drag (Windows & macOS only)
-    ├── input_backend.py     # uinput (Wayland) / PyAutoGUI input injection
-    ├── linux_backends.py    # wpctl/pactl volume, brightnessctl/xrandr brightness, screen size
-    ├── zoom_control.py      # Ctrl+Scroll pinch zoom
-    ├── media_control.py     # Play/Pause / Next / Prev media keys
-    ├── brightness_control.py# Screen brightness (cross-platform)
-    └── ui_overlay.py        # HUD, gesture badges, legend
-```
-
----
-
-## ⚙️ Configuration
-
-All parameters are centralised in `modules/config.py`. Key settings:
-
-```python
-SMOOTHING_FACTOR       = 0.30    # cursor EMA weight (lower → smoother)
-CLICK_THRESHOLD        = 0.04    # normalised pinch distance for click
-DOUBLE_CLICK_INTERVAL  = 0.40   # max seconds between two pinch starts → double click
-PRIMARY_HAND           = "Right" # hand that moves the cursor / clicks / draws
-STABILITY_FRAMES       = 3      # frames a pose must persist before it activates
-HAND_LOSS_GRACE_FRAMES = 5      # dropout frames tolerated before state is reset
-SCREENSHOT_HOLD_TIME   = 1.0    # seconds to hold 5-finger gesture
-CONTROL_ZONE_MARGIN    = 0.15   # dead-zone fraction at frame edges
-```
-
-Adjust these to match your environment (lighting, hand size, camera distance).
-
----
-
-## 📊 Performance
-
-Measured with `tools/benchmark_fps.py` (real webcam + MediaPipe, no window, no input injection),
-Fedora 44, CPU only, a hand in view. The webcam delivers 640×480 at 30 FPS and ignores a 1280×720 request,
-so 30 FPS is the ceiling.
-
-| Setting | Camera → tracking FPS (hand in view) |
-|---------|--------------------------------------|
-| Before: 1280×720 requested, `model_complexity=1` | 16.5 – 21.6 |
-| Now: 640×480, `model_complexity=0` (`MODEL_COMPLEXITY`) | 29.9 (camera-limited) |
-| Camera alone | 30.1 |
-
-Numbers vary by about ±3 FPS between runs. The full application (window, HUD, input injection) has not been
-benchmarked yet. Gesture accuracy has not been measured, so no accuracy figures are claimed.
-
----
-
-## 🔧 Troubleshooting
-
-**Camera not detected**  
-→ Change `CAMERA_INDEX` in `config.py` (try `1`, `2`, etc.)
-
-**Low FPS**  
-→ Already 640×480 / `MODEL_COMPLEXITY = 0` by default; run `python tools/benchmark_fps.py` to see where time goes
-
-**Volume not changing (Linux)**  
-→ Ensure `pulseaudio` or `pipewire-pulse` is running; amixer uses PULSE
-
-**Cursor / screenshot do nothing on Fedora (Wayland)**  
-→ PyAutoGUI cannot drive native Wayland (measured on Fedora 44 / GNOME 50: `moveTo()` does nothing, `screenshot()` raises). Do the [Wayland setup](#-wayland-setup-linux); the app prints `Input backend: uinput` at start-up when it works.
-
-**Window drag not working**  
-→ Install `pywin32` (Windows) or ensure Accessibility permissions are granted (macOS)
-
----
-
-## 🎬 Demo
-
-📹 [Demo Video Link] ← _Add your screen recording link here_
-
-![Gesture Demo Screenshot](assets/demo_screenshot.png)
-
----
-
-## 🔮 Future Improvements
-
-- **Virtual Keyboard** – Hand-tracking-based on-screen keyboard for full text input
-- **Handwriting Recognition** – Convert drawn strokes to text via an OCR model
-- **ML-based Classifier** – Replace rule-based engine with a trained CNN/LSTM for higher accuracy in challenging lighting
-- **Custom Gesture Profiles** – Per-application gesture mapping (e.g., Zoom mode for browsers, drawing mode for Photoshop)
-- **Voice + Gesture Fusion** – Combine speech commands with gestures for richer interactions
-- **Gaze Tracking Integration** – Eye + hand combined control for accessibility use cases
-
----
-
-## 📚 References
-
-1. Google MediaPipe – https://mediapipe.dev  
-2. OpenCV Documentation – https://docs.opencv.org  
-3. PyAutoGUI Documentation – https://pyautogui.readthedocs.io  
-4. Murtaza's Workshop – Hand Tracking tutorial (YouTube)  
-5. NumPy Documentation – https://numpy.org/doc  
-
----
-
-*Course Final Assessment · May 2026*
+Started as a course project at Harbin Engineering University, May 2026.
