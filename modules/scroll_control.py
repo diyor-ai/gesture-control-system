@@ -6,18 +6,17 @@ Direction: Wrist Y velocity determines scroll up / down.
 """
 
 import time
-import pyautogui
 import numpy as np
 import cv2
 from modules.config import Config
 from modules.hand_tracker import HandTracker
-
-pyautogui.PAUSE = 0
+from modules.input_backend import PyAutoGUIBackend
 
 
 class ScrollController:
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, backend=None) -> None:
         self._cfg         = cfg
+        self._input       = backend or PyAutoGUIBackend()
         self._prev_y      = None
         self._last_scroll = 0.0
         self._COOLDOWN    = 0.06   # seconds between scroll events
@@ -38,7 +37,7 @@ class ScrollController:
             delta = wrist_y - self._prev_y   # positive → hand moved down
             if abs(delta) > 0.005:           # dead-zone to avoid jitter
                 clicks = int(delta * 30)     # scale to scroll wheel clicks
-                pyautogui.scroll(-clicks)    # negative = scroll down
+                self._input.scroll(-clicks)  # negative = scroll down
                 self._last_scroll = now
                 # Feedback arrow
                 arrow = "▼" if clicks > 0 else "▲"

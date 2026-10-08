@@ -7,15 +7,16 @@ Saves PNG to ./screenshots/ with a timestamp filename.
 
 import os
 import time
-import pyautogui
 import cv2
 import numpy as np
 from modules.config import Config
+from modules.input_backend import PyAutoGUIBackend
 
 
 class ScreenshotModule:
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, backend=None) -> None:
         self._cfg      = cfg
+        self._input    = backend or PyAutoGUIBackend()
         self._save_dir = cfg.SCREENSHOT_SAVE_DIR
         os.makedirs(self._save_dir, exist_ok=True)
         self._last_capture = 0.0
@@ -31,8 +32,10 @@ class ScreenshotModule:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         path = os.path.join(self._save_dir, f"screenshot_{timestamp}.png")
 
-        img = pyautogui.screenshot()
-        img.save(path)
+        if not self._input.screenshot(path):
+            print("[Screenshot] Failed – on GNOME/Wayland install gnome-screenshot "
+                  "(sudo dnf install gnome-screenshot)")
+            return
         print(f"[Screenshot] Saved → {path}")
 
         # Flash white on the camera frame as confirmation

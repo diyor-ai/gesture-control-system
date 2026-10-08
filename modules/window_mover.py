@@ -6,11 +6,9 @@ Moves   : The foreground window by tracking fist displacement.
 """
 
 import platform
-import pyautogui
 import numpy as np
 from modules.config import Config
 
-pyautogui.PAUSE = 0
 
 
 class WindowMover:

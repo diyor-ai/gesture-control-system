@@ -21,6 +21,9 @@ class Config:
     # instead of pretending to work.
     WINDOW_DRAG_ENABLED = platform.system() in ("Windows", "Darwin")
 
+    # ── Input injection ───────────────────────────────────────────────────────
+    INPUT_BACKEND = "auto"                 # "auto" | "uinput" | "pyautogui" (or $GESTURE_INPUT)
+
     # ── Camera ────────────────────────────────────────────────────────────────
     CAMERA_INDEX  = 0
     FRAME_WIDTH   = 1280

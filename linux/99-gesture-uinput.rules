@@ -1,0 +1,4 @@
+# Give the dedicated "uinput" group (and nobody else) access to /dev/uinput,
+# so the gesture app can create a virtual mouse without joining the "input"
+# group (which would also allow reading every keyboard).
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="uinput", MODE="0660", OPTIONS+="static_node=uinput"

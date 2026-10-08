@@ -27,6 +27,7 @@ from modules.media_control import MediaController
 from modules.brightness_control import BrightnessController
 from modules.ui_overlay import UIOverlay
 from modules.config import Config
+from modules.input_backend import InputBackendError, create_backend
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -56,17 +57,25 @@ def main(debug: bool = False) -> None:
         print("[ERROR] Cannot open camera. Check CAMERA_INDEX in config.py.")
         sys.exit(1)
 
+    # ── Input injection (uinput on Wayland, PyAutoGUI elsewhere) ─────────────
+    try:
+        backend = create_backend(cfg)
+    except InputBackendError as exc:
+        print(f"[ERROR] {exc}")
+        sys.exit(1)
+    print(f"[INFO] Input backend: {backend.name}")
+
     # ── Initialise modules ────────────────────────────────────────────────────
     tracker    = HandTracker(cfg)
-    cursor     = CursorController(cfg)
+    cursor     = CursorController(cfg, backend)
     engine     = GestureEngine(cfg)
     volume     = VolumeController(cfg)
-    scroller   = ScrollController(cfg)
+    scroller   = ScrollController(cfg, backend)
     canvas     = DrawingCanvas(cfg)
-    screenshot = ScreenshotModule(cfg)
+    screenshot = ScreenshotModule(cfg, backend)
     win_mover  = WindowMover(cfg)
-    zoomer     = ZoomController(cfg)
-    media      = MediaController(cfg)
+    zoomer     = ZoomController(cfg, backend)
+    media      = MediaController(cfg, backend)
     brightness = BrightnessController(cfg)
     overlay    = UIOverlay(cfg)
 
@@ -207,6 +216,7 @@ def main(debug: bool = False) -> None:
     cv2.destroyAllWindows()
     volume.close()
     brightness.close()
+    backend.close()
     print("[INFO] Gesture Control System shut down cleanly.")
 
 

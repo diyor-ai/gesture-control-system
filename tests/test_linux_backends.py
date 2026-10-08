@@ -121,3 +121,26 @@ def test_screen_size_falls_back_to_xrandr_then_default(monkeypatch):
     assert lb.screen_size() == (2560, 1440)
     FakeSystem(monkeypatch, set())
     assert lb.screen_size() == (1920, 1080)
+
+
+def test_screenshot_uses_gnome_screenshot_and_checks_the_file(monkeypatch, tmp_path):
+    out = tmp_path / "shot.png"
+    system = FakeSystem(monkeypatch, {"gnome-screenshot", "grim"})
+    monkeypatch.setattr(lb.os.path, "exists", lambda p: True)
+    assert lb.take_screenshot(str(out)) is True
+    assert system.calls == [["gnome-screenshot", "-f", str(out)]]
+
+
+def test_screenshot_falls_back_to_grim_and_reports_failure(monkeypatch, tmp_path):
+    out = str(tmp_path / "shot.png")
+    system = FakeSystem(monkeypatch, {"grim"})
+    monkeypatch.setattr(lb.os.path, "exists", lambda p: True)
+    assert lb.take_screenshot(out) is True
+    assert system.calls == [["grim", out]]
+    FakeSystem(monkeypatch, set())
+    assert lb.take_screenshot(out) is False
+
+
+def test_screenshot_is_a_failure_when_no_file_appears(monkeypatch, tmp_path):
+    FakeSystem(monkeypatch, {"gnome-screenshot"})
+    assert lb.take_screenshot(str(tmp_path / "missing.png")) is False

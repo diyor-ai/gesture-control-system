@@ -5,18 +5,17 @@ Gesture : Thumb + index finger spread / pinched.
 Maps pinch distance change to Ctrl+scroll, which triggers zoom in most apps.
 """
 
-import pyautogui
 import numpy as np
 import cv2
 from modules.config import Config
 from modules.hand_tracker import HandTracker
-
-pyautogui.PAUSE = 0
+from modules.input_backend import PyAutoGUIBackend
 
 
 class ZoomController:
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, backend=None) -> None:
         self._cfg      = cfg
+        self._input    = backend or PyAutoGUIBackend()
         self._prev_d   = None
         self._DEADZONE = 0.025   # palm lengths
 
@@ -32,9 +31,7 @@ class ZoomController:
             delta = d - self._prev_d
             if abs(delta) > self._DEADZONE:
                 clicks = int(delta * 6)
-                pyautogui.keyDown("ctrl")
-                pyautogui.scroll(clicks)
-                pyautogui.keyUp("ctrl")
+                self._input.ctrl_scroll(clicks)
 
                 # Visual feedback
                 label = "ZOOM IN" if clicks > 0 else "ZOOM OUT"

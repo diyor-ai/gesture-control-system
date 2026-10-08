@@ -5,6 +5,7 @@ through to the next one when a tool is missing or fails.
 
 Volume      : wpctl (PipeWire)  →  pactl (PulseAudio / pipewire-pulse)  →  amixer
 Brightness  : brightnessctl     →  xrandr (software gamma on the detected output)
+Screenshot  : gnome-screenshot  →  grim (wlroots compositors)
 Screen size : screeninfo (primary monitor)  →  xrandr  →  1920x1080
               (override with the GESTURE_SCREEN=WIDTHxHEIGHT environment variable)
 """
@@ -104,3 +105,13 @@ def screen_size() -> Tuple[int, int]:
             return int(match.group(1)), int(match.group(2))
 
     return 1920, 1080
+
+
+# ── Screenshot ────────────────────────────────────────────────────────────────
+
+def take_screenshot(path: str) -> bool:
+    """Save the whole screen to `path` (PNG). Returns True if a file was written."""
+    for cmd in (["gnome-screenshot", "-f", path], ["grim", path]):
+        if _ok(cmd) and os.path.exists(path):
+            return True
+    return False

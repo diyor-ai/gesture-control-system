@@ -10,23 +10,20 @@ Features
 * Hand-loss recovery (cursor freezes rather than snapping to 0,0)
 """
 
-import pyautogui
 import numpy as np
 from typing import List
 from modules.config import Config
 from modules.hand_tracker import HandTracker
+from modules.input_backend import PyAutoGUIBackend
 
-
-# Disable PyAutoGUI's built-in pause between actions and fail-safe
-pyautogui.PAUSE     = 0
-pyautogui.FAILSAFE  = False
 
 
 class CursorController:
     """Maps index-finger tip coordinates to screen cursor position."""
 
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, backend=None) -> None:
         self._cfg = cfg
+        self._input = backend or PyAutoGUIBackend()
         self._sw  = cfg.SCREEN_W
         self._sh  = cfg.SCREEN_H
         self._fw  = cfg.FRAME_WIDTH
@@ -70,14 +67,14 @@ class CursorController:
         self._smooth_x = self._alpha * target_x + (1 - self._alpha) * self._smooth_x
         self._smooth_y = self._alpha * target_y + (1 - self._alpha) * self._smooth_y
 
-        pyautogui.moveTo(int(self._smooth_x), int(self._smooth_y))
+        self._input.move_to(int(self._smooth_x), int(self._smooth_y))
 
     # Clicks happen where the cursor already is: moving to the fingertip here
     # would drag the pointer while the thumb closes in on the index finger.
 
     def click(self, landmarks: List[tuple]) -> None:
         """Perform a single left-click at the current cursor position."""
-        pyautogui.click()
+        self._input.click()
 
     def double_click(self, landmarks: List[tuple]) -> None:
         """
@@ -85,11 +82,11 @@ class CursorController:
         click, so one more click inside the OS double-click time makes a real
         double click (pyautogui.doubleClick() here would add a third click).
         """
-        pyautogui.click()
+        self._input.click()
 
     def right_click(self, landmarks: List[tuple]) -> None:
         """Perform a right-click at the current cursor position."""
-        pyautogui.rightClick()
+        self._input.right_click()
 
     def on_hand_lost(self) -> None:
         """
