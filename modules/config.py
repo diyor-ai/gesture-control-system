@@ -30,6 +30,9 @@ class Config:
     DETECTION_CONFIDENCE   = 0.75
     TRACKING_CONFIDENCE    = 0.75
 
+    PRIMARY_HAND           = "Right"       # "Left" | "Right": drives cursor, clicks and drawing
+                                           # (the other hand gets ZOOM instead)
+
     # ── Cursor movement ───────────────────────────────────────────────────────
     # Fraction of frame used as the active control zone (avoids edge dead-zones)
     CONTROL_ZONE_MARGIN    = 0.15          # 15 % margin on each side
@@ -38,11 +41,11 @@ class Config:
 
     # ── Gesture thresholds ────────────────────────────────────────────────────
     CLICK_THRESHOLD        = 0.04          # normalised distance between tips
-    DOUBLE_CLICK_INTERVAL  = 0.35          # seconds between two clicks to register as double
+    DOUBLE_CLICK_INTERVAL  = 0.40          # max seconds between two pinch starts (<= OS double-click time)
     SCROLL_THRESHOLD       = 0.06          # minimum pinch distance for scroll gesture
     DRAW_MODE_DISTANCE     = 0.05          # index–middle gap to enter draw mode
-    ZOOM_THRESHOLD         = 0.08          # pinch distance to begin zoom
     SCREENSHOT_HOLD_TIME   = 1.0           # seconds gesture must be held
+    PLAY_PAUSE_HOLD_TIME   = 0.5           # seconds the 3-finger pose must be held
     DRAG_THRESHOLD         = 0.05
 
     # ── Volume / Brightness ───────────────────────────────────────────────────

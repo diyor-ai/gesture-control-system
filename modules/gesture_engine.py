@@ -2,58 +2,81 @@
 gesture_engine.py – Core gesture classification module.
 
 Maps raw MediaPipe landmarks to named gestures consumed by other modules.
-Each gesture maps to exactly one action string returned by classify().
+Each hand has its own state, and every gesture has its own pose, so no two
+gestures can shadow each other.
 
-Supported gestures
-------------------
-MOVE_CURSOR     – Index finger up, others down
-CLICK           – Index + Thumb pinch
-DOUBLE_CLICK    – Two rapid pinches
-RIGHT_CLICK     – Middle + Thumb pinch
-SCROLL          – Two-finger (index + middle) up together, wrist leads direction
-VOLUME          – Thumb + Pinky spread (like a phone hand 🤙)
-DRAW            – Index up, middle curled, index–middle gap < threshold (draw mode)
-SCREENSHOT      – All five fingers spread wide, held for 1 s
-DRAG_WINDOW     – Closed fist (all fingers curled)
-ZOOM            – Index + Thumb spread (pinch gesture)
-MEDIA_PLAY_PAUSE– Flat palm facing camera
-MEDIA_NEXT      – Swipe right (index extended, wrist moving right)
-MEDIA_PREV      – Swipe left  (index extended, wrist moving left)
-BRIGHTNESS      – Ring + Thumb spread
+Poses (T I M R P = thumb, index, middle, ring, pinky; "-" = ignored)
+--------------------------------------------------------------------
+Primary hand only (cursor family, Config.PRIMARY_HAND, default "Right")
+  MOVE_CURSOR       – index up, M R P down, thumb free (also the L shape)
+  CLICK             – same pose, thumb tip pinched onto the index tip
+  DOUBLE_CLICK      – a second CLICK pinch within DOUBLE_CLICK_INTERVAL
+  RIGHT_CLICK       – only middle up, thumb tip pinched onto the middle tip
+  DRAW              – like MOVE_CURSOR, but while the canvas is enabled
+
+Secondary hand only
+  ZOOM              – L shape: thumb + index up, M R P down
+
+Either hand
+  SCROLL            – T - | I M up, R P down              (peace sign)
+  VOLUME            – T up, P up, I M R down              (hang loose)
+  BRIGHTNESS        – T up, R up, I M P down
+  DRAG_WINDOW       – I M R P down (fist, thumb ignored)
+  MEDIA_PLAY_PAUSE  – I M R up, P down, held PLAY_PAUSE_HOLD_TIME
+  MEDIA_NEXT / PREV – I P up, M R down, then swipe right / left
+  SCREENSHOT        – all five fingers up, held SCREENSHOT_HOLD_TIME
+
+Event gestures (clicks, play/pause, screenshot, swipes) are returned exactly
+once; everything else is level-triggered and returned every frame.
 """
 
 import time
-from typing import Callable, List, Optional
-import numpy as np
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional, Tuple
 from modules.config import Config
 from modules.hand_tracker import HandTracker
+
+# Poses whose gesture is reported on every frame while the pose is held.
+_CONTINUOUS = frozenset(
+    {"MOVE_CURSOR", "DRAW", "SCROLL", "VOLUME", "BRIGHTNESS", "DRAG_WINDOW", "ZOOM"}
+)
+
+
+@dataclass
+class _HandState:
+    """Everything the engine remembers about one hand between frames."""
+    last_click_time: float = float("-inf")
+    last_media_time: float = float("-inf")
+    wrist_history: List[float] = field(default_factory=list)
+    prev_pose: str = "IDLE"
+    pose_since: float = 0.0
+    entered: bool = False      # pose changed on this very frame
+    fired: bool = False        # one-shot already emitted for the current pose
 
 
 class GestureEngine:
     """
-    Stateful gesture classifier.  Maintains per-session history for
-    gestures that require timing (double-click, screenshot hold, swipe).
+    Stateful gesture classifier.  Keeps one `_HandState` per hand label so
+    timing-based gestures (double click, holds, swipes) never mix two hands.
     """
 
+    _SWIPE_HISTORY = 6
+    _SWIPE_DELTA   = 0.06
+
     def __init__(self, cfg: Config, clock: Callable[[], float] = time.monotonic) -> None:
-        self._cfg         = cfg
-        self._clock       = clock
+        if cfg.PRIMARY_HAND not in ("Left", "Right"):
+            raise ValueError(
+                f"Config.PRIMARY_HAND must be 'Left' or 'Right', got {cfg.PRIMARY_HAND!r}"
+            )
+        self._cfg   = cfg
+        self._clock = clock
+        self._states: Dict[str, _HandState] = {}
+        self._seen: set = set()
+
+        self.primary_hand = cfg.PRIMARY_HAND
         self.active_mode  = "IDLE"
-
-        # ── Timing / state ─────────────────────────────────────────────────
-        self._last_click_time   = float("-inf")
-        self._latched: Optional[str] = None   # click gesture still being held
-        self._last_gesture      = ""
-        self._screenshot_start  = 0.0
-        self._screenshot_fired  = False
-
-        # Wrist position history for swipe detection
-        self._wrist_history: List[float] = []
-        self._SWIPE_HISTORY = 6
-        self._SWIPE_DELTA   = 0.06
-
-        # Media action cooldown
-        self._last_media_action_time = 0.0
+        # Per-hand diagnostics for the --debug overlay
+        self.debug: Dict[str, dict] = {}
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -70,166 +93,141 @@ class GestureEngine:
         Returns
         -------
         gesture string, e.g. "CLICK", "SCROLL", "IDLE"
-
-        Click gestures are edge-triggered: CLICK / DOUBLE_CLICK / RIGHT_CLICK
-        are returned once when the pinch starts; while the pinch is held (and
-        until it is released) the engine returns "IDLE".
         """
-        gesture = self._classify_pose(landmarks, hand_label, canvas_enabled)
+        now   = self._clock()
+        state = self._states.setdefault(hand_label, _HandState(pose_since=now))
+        first = not self._seen
+        self._seen.add(hand_label)
 
-        if gesture in ("CLICK", "RIGHT_CLICK"):
-            if self._latched == gesture:
-                self.active_mode = "IDLE"
-                return "IDLE"
-            self._latched = gesture
-            if gesture == "CLICK":
-                gesture = self._handle_click()
-            self.active_mode = gesture
-            return gesture
+        fingers = HandTracker.fingers_up(landmarks)
+        is_primary = hand_label == self.primary_hand
+        pose = self._pose(landmarks, fingers, is_primary, canvas_enabled)
 
-        self._latched = None
+        state.entered = pose != state.prev_pose
+        if state.entered:
+            state.prev_pose  = pose
+            state.pose_since = now
+            state.fired      = False
+            state.wrist_history.clear()
+
+        gesture, mode = self._resolve(state, pose, landmarks, now)
+
+        if first or mode != "IDLE":
+            self.active_mode = mode
+        self.debug[hand_label] = {
+            "fingers": fingers, "pose": pose, "gesture": gesture, "primary": is_primary,
+        }
         return gesture
 
-    def _classify_pose(self, landmarks: List[tuple], hand_label: str, canvas_enabled: bool) -> str:
-        """Level-triggered pose classification (one result per frame)."""
-        fingers = HandTracker.fingers_up(landmarks)
-        dist    = HandTracker.distance
+    def end_frame(self) -> None:
+        """Call once per camera frame, after every visible hand was classified."""
+        if not self._seen:
+            self.active_mode = "IDLE"
+        self.debug = {k: v for k, v in self.debug.items() if k in self._seen}
+        self._seen = set()
 
+    # ── Pose classification (stateless) ───────────────────────────────────────
+
+    def _pose(
+        self,
+        landmarks: List[tuple],
+        fingers: List[bool],
+        is_primary: bool,
+        canvas_enabled: bool,
+    ) -> str:
+        """Map finger states to exactly one pose name for this frame."""
         thumb, index, middle, ring, pinky = fingers
-        n_up = sum(fingers)
+        dist = HandTracker.distance
+        others_down = not (middle or ring or pinky)
 
-        thumb_tip  = landmarks[4]
-        index_tip  = landmarks[8]
-        middle_tip = landmarks[12]
-        ring_tip   = landmarks[16]
-        pinky_tip  = landmarks[20]
-        wrist      = landmarks[0]
-
-        # ── Gesture rules (checked in priority order) ──────────────────────
-
-        # 1. Screenshot – all 5 fingers extended, held ≥ SCREENSHOT_HOLD_TIME
-        if n_up == 5:
-            gesture = self._handle_screenshot()
-            if gesture:
-                self.active_mode = gesture
-                return gesture
-            self.active_mode = "SCREENSHOT_HOLD"
-            return "IDLE"
-
-        self._screenshot_start = 0.0
-        self._screenshot_fired = False
-
-        # 2. Fist → drag window
-        if n_up == 0:
-            self.active_mode = "DRAG_WINDOW"
+        if thumb and index and middle and ring and pinky:
+            return "SCREENSHOT"
+        if not (index or middle or ring or pinky):
             return "DRAG_WINDOW"
-
-        # 3. Flat palm (4 fingers + thumb) → Media Play/Pause
-        if n_up == 5:
-            self.active_mode = "MEDIA_PLAY_PAUSE"
-            return "MEDIA_PLAY_PAUSE"
-
-        # 4. Volume: thumb + pinky up, others down (🤙 shape)
-        if thumb and not index and not middle and not ring and pinky:
-            self.active_mode = "VOLUME"
+        if thumb and pinky and not (index or middle or ring):
             return "VOLUME"
-
-        # 5. Brightness: thumb + ring up, others down
-        if thumb and not index and not middle and ring and not pinky:
-            self.active_mode = "BRIGHTNESS"
+        if thumb and ring and not (index or middle or pinky):
             return "BRIGHTNESS"
-
-        # 6. Zoom: thumb + index only (classic pinch spread)
-        if thumb and index and not middle and not ring and not pinky:
-            d = dist(thumb_tip, index_tip)
-            if d > self._cfg.ZOOM_THRESHOLD:
-                self.active_mode = "ZOOM"
-                return "ZOOM"
-
-        # 7. Click: index up, middle curled, thumb approaching index tip
-        if index and not middle and not ring and not pinky:
-            d_click = dist(thumb_tip, index_tip)
-            if d_click < self._cfg.CLICK_THRESHOLD:
-                self.active_mode = "CLICK"
-                return "CLICK"
-
-        # 8. Right-click: middle up, thumb approaching middle tip
-        if not index and middle and not ring and not pinky:
-            d_right = dist(thumb_tip, middle_tip)
-            if d_right < self._cfg.CLICK_THRESHOLD:
-                self.active_mode = "RIGHT_CLICK"
-                return "RIGHT_CLICK"
-
-        # 9. Scroll: index + middle both extended (peace sign)
-        if index and middle and not ring and not pinky:
-            # Track wrist Y for scroll direction
-            self.active_mode = "SCROLL"
+        if index and middle and ring and not pinky:
+            return "MEDIA_PLAY_PAUSE"
+        if index and pinky and not (middle or ring):
+            return "MEDIA_SWIPE"
+        if index and middle and not (ring or pinky):
             return "SCROLL"
 
-        # 10. Draw: index only, middle curled, others down (only when canvas enabled)
-        if canvas_enabled and index and not middle and not ring and not pinky:
-            self.active_mode = "DRAW"
-            return "DRAW"
+        if index and others_down:
+            if is_primary:
+                if dist(landmarks[4], landmarks[8]) < self._cfg.CLICK_THRESHOLD:
+                    return "CLICK"
+                return "DRAW" if canvas_enabled else "MOVE_CURSOR"
+            return "ZOOM" if thumb else "IDLE"
 
-        # 11. Media swipe detection (index + pinky = "horns")
-        if index and not middle and not ring and pinky:
-            swipe = self._detect_swipe(wrist)
-            if swipe:
-                self.active_mode = swipe
-                return swipe
+        if middle and not (index or ring or pinky) and is_primary:
+            if dist(landmarks[4], landmarks[12]) < self._cfg.CLICK_THRESHOLD:
+                return "RIGHT_CLICK"
 
-        # 12. Default – cursor movement (index extended)
-        if index and not middle and not ring and not pinky:
-            self.active_mode = "MOVE_CURSOR"
-            return "MOVE_CURSOR"
-
-        self.active_mode = "IDLE"
         return "IDLE"
 
-    # ── Private helpers ────────────────────────────────────────────────────────
+    # ── Pose → gesture (stateful) ─────────────────────────────────────────────
 
-    def _handle_click(self) -> str:
-        """Distinguish single vs double click based on timing."""
-        now = self._clock()
-        if now - self._last_click_time < self._cfg.DOUBLE_CLICK_INTERVAL:
-            self._last_click_time = float("-inf")  # reset so a third pinch starts a new click
+    def _resolve(
+        self, state: _HandState, pose: str, landmarks: List[tuple], now: float
+    ) -> Tuple[str, str]:
+        """Turn a pose into the gesture to dispatch; returns (gesture, hud_mode)."""
+        if pose in _CONTINUOUS:
+            return pose, pose
+
+        if pose == "CLICK":
+            if state.entered:
+                gesture = self._click(state, now)
+                return gesture, gesture
+            return "IDLE", "IDLE"
+
+        if pose == "RIGHT_CLICK":
+            return ("RIGHT_CLICK", pose) if state.entered else ("IDLE", "IDLE")
+
+        if pose in ("SCREENSHOT", "MEDIA_PLAY_PAUSE"):
+            hold = (self._cfg.SCREENSHOT_HOLD_TIME if pose == "SCREENSHOT"
+                    else self._cfg.PLAY_PAUSE_HOLD_TIME)
+            if state.fired:
+                return "IDLE", "IDLE"
+            if now - state.pose_since >= hold:
+                state.fired = True
+                return pose, pose
+            return "IDLE", f"{pose}_HOLD" if pose == "SCREENSHOT" else "PLAY_PAUSE_HOLD"
+
+        if pose == "MEDIA_SWIPE":
+            swipe = self._swipe(state, landmarks[0][0], now)
+            return (swipe, swipe) if swipe else ("IDLE", "IDLE")
+
+        return "IDLE", "IDLE"
+
+    def _click(self, state: _HandState, now: float) -> str:
+        """A new pinch: DOUBLE_CLICK if the previous pinch was recent enough."""
+        if now - state.last_click_time < self._cfg.DOUBLE_CLICK_INTERVAL:
+            state.last_click_time = float("-inf")   # a third pinch starts afresh
             return "DOUBLE_CLICK"
-        self._last_click_time = now
+        state.last_click_time = now
         return "CLICK"
 
-    def _handle_screenshot(self) -> Optional[str]:
-        """Return 'SCREENSHOT' once the gesture has been held long enough."""
-        now = self._clock()
-        if self._screenshot_start == 0.0:
-            self._screenshot_start = now
-            return None
-        held = now - self._screenshot_start
-        if held >= self._cfg.SCREENSHOT_HOLD_TIME and not self._screenshot_fired:
-            self._screenshot_fired = True
-            return "SCREENSHOT"
-        return None
-
-    def _detect_swipe(self, wrist: tuple) -> Optional[str]:
+    def _swipe(self, state: _HandState, wrist_x: float, now: float) -> Optional[str]:
         """
         Buffer recent wrist X positions and detect left/right swipes.
-        Returns 'MEDIA_NEXT', 'MEDIA_PREV', or None.
+        The frame is already mirrored, so +x is the user's right.
         """
-        now = self._clock()
-        if now - self._last_media_action_time < self._cfg.MEDIA_COOLDOWN:
+        if now - state.last_media_time < self._cfg.MEDIA_COOLDOWN:
             return None
 
-        self._wrist_history.append(wrist[0])
-        if len(self._wrist_history) > self._SWIPE_HISTORY:
-            self._wrist_history.pop(0)
-
-        if len(self._wrist_history) < self._SWIPE_HISTORY:
+        hist = state.wrist_history
+        hist.append(wrist_x)
+        if len(hist) > self._SWIPE_HISTORY:
+            hist.pop(0)
+        if len(hist) < self._SWIPE_HISTORY:
             return None
 
-        delta = self._wrist_history[-1] - self._wrist_history[0]
+        delta = hist[-1] - hist[0]
         if abs(delta) >= self._SWIPE_DELTA:
-            self._wrist_history.clear()
-            self._last_media_action_time = now
-            # Flipped because frame is mirrored
-            return "MEDIA_PREV" if delta > 0 else "MEDIA_NEXT"
-
+            hist.clear()
+            state.last_media_time = now
+            return "MEDIA_NEXT" if delta > 0 else "MEDIA_PREV"
         return None
