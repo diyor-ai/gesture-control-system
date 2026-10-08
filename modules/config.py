@@ -46,11 +46,9 @@ class Config:
     # ── Gesture thresholds ────────────────────────────────────────────────────
     CLICK_THRESHOLD        = 0.04          # normalised distance between tips
     DOUBLE_CLICK_INTERVAL  = 0.40          # max seconds between two pinch starts (<= OS double-click time)
-    SCROLL_THRESHOLD       = 0.06          # minimum pinch distance for scroll gesture
     DRAW_MODE_DISTANCE     = 0.05          # index–middle gap to enter draw mode
     SCREENSHOT_HOLD_TIME   = 1.0           # seconds gesture must be held
     PLAY_PAUSE_HOLD_TIME   = 0.5           # seconds the 3-finger pose must be held
-    DRAG_THRESHOLD         = 0.05
 
     # ── Volume / Brightness ───────────────────────────────────────────────────
     VOLUME_MIN_DIST        = 0.02
