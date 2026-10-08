@@ -11,6 +11,7 @@ Entry point – initialises all modules and runs the main event loop.
 import cv2
 import time
 import sys
+from modules.camera import CameraError, read_frame
 from modules.hand_tracker import HandTracker
 from modules.cursor_controller import CursorController
 from modules.gesture_engine import GestureEngine
@@ -67,10 +68,13 @@ def main() -> None:
     print("[INFO] Press 'r' to clear the drawing canvas.")
 
     while True:
-        success, frame = cap.read()
-        if not success:
-            print("[WARN] Failed to read frame – retrying...")
-            continue
+        try:
+            frame = read_frame(cap, cfg.CAMERA_MAX_READ_FAILURES, cfg.CAMERA_RETRY_DELAY)
+        except CameraError as exc:
+            print(f"[ERROR] {exc}")
+            cap.release()
+            cv2.destroyAllWindows()
+            sys.exit(1)
 
         # Mirror so the display feels natural
         frame = cv2.flip(frame, 1)

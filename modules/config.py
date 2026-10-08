@@ -21,6 +21,8 @@ class Config:
     FRAME_WIDTH   = 1280
     FRAME_HEIGHT  = 720
     TARGET_FPS    = 30
+    CAMERA_MAX_READ_FAILURES = 30          # consecutive failed reads before giving up
+    CAMERA_RETRY_DELAY       = 0.1         # seconds between retries
 
     # ── Screen ────────────────────────────────────────────────────────────────
     SCREEN_W, SCREEN_H = _get_screen_resolution()
