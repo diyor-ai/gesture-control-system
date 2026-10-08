@@ -93,7 +93,7 @@ def main() -> None:
                 hand_label = hand_info["label"]          # "Left" | "Right"
 
                 # ── Classify current gesture ──────────────────────────────────
-                gesture = engine.classify(landmarks, hand_label)
+                gesture = engine.classify(landmarks, hand_label, canvas_enabled=canvas._enabled)
 
                 # ── Module dispatch ───────────────────────────────────────────
                 if gesture == "MOVE_CURSOR":

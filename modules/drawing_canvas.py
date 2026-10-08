@@ -9,6 +9,7 @@ Clear   : Press 'r' key.
 import numpy as np
 import cv2
 from modules.config import Config
+from typing import List
 
 
 class DrawingCanvas:
@@ -31,7 +32,7 @@ class DrawingCanvas:
         self._prev_pt   = None
         print("[Canvas] Cleared")
 
-    def draw(self, landmarks: list[tuple], frame: np.ndarray) -> None:
+    def draw(self, landmarks: List[tuple], frame: np.ndarray) -> None:
         """Draw a line from the previous to the current index-finger-tip position."""
         if not self._enabled:
             return

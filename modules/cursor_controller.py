@@ -12,6 +12,7 @@ Features
 
 import pyautogui
 import numpy as np
+from typing import List
 from modules.config import Config
 from modules.hand_tracker import HandTracker
 
@@ -46,7 +47,7 @@ class CursorController:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def move(self, landmarks: list[tuple]) -> None:
+    def move(self, landmarks: List[tuple]) -> None:
         """
         Move the cursor to the position indicated by the index finger tip.
         Applies exponential moving average smoothing.
@@ -71,17 +72,17 @@ class CursorController:
 
         pyautogui.moveTo(int(self._smooth_x), int(self._smooth_y))
 
-    def click(self, landmarks: list[tuple]) -> None:
+    def click(self, landmarks: List[tuple]) -> None:
         """Perform a single left-click at the current cursor position."""
         self.move(landmarks)
         pyautogui.click()
 
-    def double_click(self, landmarks: list[tuple]) -> None:
+    def double_click(self, landmarks: List[tuple]) -> None:
         """Perform a double left-click at the current cursor position."""
         self.move(landmarks)
         pyautogui.doubleClick()
 
-    def right_click(self, landmarks: list[tuple]) -> None:
+    def right_click(self, landmarks: List[tuple]) -> None:
         """Perform a right-click at the current cursor position."""
         self.move(landmarks)
         pyautogui.rightClick()

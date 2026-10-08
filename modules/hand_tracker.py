@@ -8,6 +8,7 @@ normalised landmarks from each frame.
 import cv2
 import mediapipe as mp
 import numpy as np
+from typing import List, Tuple, Dict
 from modules.config import Config
 
 
@@ -58,7 +59,7 @@ class HandTracker:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def process(self, frame: np.ndarray) -> tuple[np.ndarray, list[dict]]:
+    def process(self, frame: np.ndarray) -> Tuple[np.ndarray, List[Dict]]:
         """
         Run hand detection on a BGR frame.
 
@@ -75,7 +76,7 @@ class HandTracker:
         results = self.hands.process(rgb)
         rgb.flags.writeable = True
 
-        hands_data: list[dict] = []
+        hands_data: List[Dict] = []
         h, w = frame.shape[:2]
 
         if results.multi_hand_landmarks:
@@ -127,7 +128,7 @@ class HandTracker:
         ))
 
     @staticmethod
-    def fingers_up(landmarks: list[tuple]) -> list[bool]:
+    def fingers_up(landmarks: List[tuple]) -> List[bool]:
         """
         Return a boolean list [thumb, index, middle, ring, pinky]
         indicating which fingers are extended.

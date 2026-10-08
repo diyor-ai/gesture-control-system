@@ -1,5 +1,3 @@
-from __future__ import annotations
-from __future__ import annotations
 """
 gesture_engine.py – Core gesture classification module.
 
@@ -23,7 +21,9 @@ MEDIA_NEXT      – Swipe right (index extended, wrist moving right)
 MEDIA_PREV      – Swipe left  (index extended, wrist moving left)
 BRIGHTNESS      – Ring + Thumb spread
 """
+
 import time
+from typing import List, Optional
 import numpy as np
 from modules.config import Config
 from modules.hand_tracker import HandTracker
@@ -46,7 +46,7 @@ class GestureEngine:
         self._screenshot_fired  = False
 
         # Wrist position history for swipe detection
-        self._wrist_history: list[float] = []
+        self._wrist_history: List[float] = []
         self._SWIPE_HISTORY = 6
         self._SWIPE_DELTA   = 0.06
 
@@ -55,14 +55,15 @@ class GestureEngine:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def classify(self, landmarks: list[tuple], hand_label: str) -> str:
+    def classify(self, landmarks: List[tuple], hand_label: str, canvas_enabled: bool = False) -> str:
         """
         Classify the current hand pose and return a gesture string.
 
         Parameters
         ----------
-        landmarks  : 21 normalised (x, y, z) tuples from MediaPipe
-        hand_label : "Left" or "Right"
+        landmarks       : 21 normalised (x, y, z) tuples from MediaPipe
+        hand_label      : "Left" or "Right"
+        canvas_enabled  : Whether drawing canvas is enabled (from main.py)
 
         Returns
         -------
@@ -143,12 +144,10 @@ class GestureEngine:
             self.active_mode = "SCROLL"
             return "SCROLL"
 
-        # 10. Draw: index only, middle curled, gap small (no click)
-        if index and not middle and not ring and not pinky:
-            d_im = dist(index_tip, middle_tip)
-            if d_im < self._cfg.DRAW_MODE_DISTANCE:
-                self.active_mode = "DRAW"
-                return "DRAW"
+        # 10. Draw: index only, middle curled, others down (only when canvas enabled)
+        if canvas_enabled and index and not middle and not ring and not pinky:
+            self.active_mode = "DRAW"
+            return "DRAW"
 
         # 11. Media swipe detection (index + pinky = "horns")
         if index and not middle and not ring and pinky:
@@ -176,7 +175,7 @@ class GestureEngine:
         self._last_click_time = now
         return "CLICK"
 
-    def _handle_screenshot(self) -> str | None:
+    def _handle_screenshot(self) -> Optional[str]:
         """Return 'SCREENSHOT' once the gesture has been held long enough."""
         now = time.time()
         if self._screenshot_start == 0.0:
@@ -188,7 +187,7 @@ class GestureEngine:
             return "SCREENSHOT"
         return None
 
-    def _detect_swipe(self, wrist: tuple) -> str | None:
+    def _detect_swipe(self, wrist: tuple) -> Optional[str]:
         """
         Buffer recent wrist X positions and detect left/right swipes.
         Returns 'MEDIA_NEXT', 'MEDIA_PREV', or None.
