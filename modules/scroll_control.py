@@ -20,6 +20,7 @@ class ScrollController:
         self._prev_y      = None
         self._last_scroll = 0.0
         self._COOLDOWN    = 0.06   # seconds between scroll events
+        self._DEADZONE    = 0.025  # palm lengths
 
     def reset(self) -> None:
         """Forget the previous wrist position (call when the gesture ends)."""
@@ -34,9 +35,11 @@ class ScrollController:
         wrist_y = landmarks[0][1]    # normalised 0–1
 
         if self._prev_y is not None:
-            delta = wrist_y - self._prev_y   # positive → hand moved down
-            if abs(delta) > 0.005:           # dead-zone to avoid jitter
-                clicks = int(delta * 30)     # scale to scroll wheel clicks
+            # Movement in palm lengths, so the same gesture scrolls the same
+            # amount near and far from the camera. Positive → hand moved down.
+            delta = (wrist_y - self._prev_y) / HandTracker.hand_scale(landmarks)
+            if abs(delta) > self._DEADZONE:  # dead-zone to avoid jitter
+                clicks = int(delta * 6)      # scale to scroll wheel clicks
                 self._input.scroll(-clicks)  # negative = scroll down
                 self._last_scroll = now
                 # Feedback arrow

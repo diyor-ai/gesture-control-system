@@ -53,7 +53,7 @@ class _HandState:
     """Everything the engine remembers about one hand between frames."""
     last_click_time: float = float("-inf")
     last_media_time: float = float("-inf")
-    wrist_history: List[float] = field(default_factory=list)
+    wrist_history: List[Tuple[float, float]] = field(default_factory=list)
     stable: str = "IDLE"           # the active (debounced) pose
     pose_since: float = 0.0        # when the active pose was first seen
     candidate: str = "IDLE"        # pose being counted towards activation
@@ -71,7 +71,7 @@ class GestureEngine:
     """
 
     _SWIPE_HISTORY = 6
-    _SWIPE_DELTA   = 0.06
+    _SWIPE_DELTA   = 0.30      # palm lengths travelled by the wrist over the history
 
     def __init__(self, cfg: Config, clock: Callable[[], float] = time.monotonic) -> None:
         if cfg.PRIMARY_HAND not in ("Left", "Right"):
@@ -237,7 +237,7 @@ class GestureEngine:
             return "IDLE", f"{pose}_HOLD" if pose == "SCREENSHOT" else "PLAY_PAUSE_HOLD"
 
         if pose == "MEDIA_SWIPE":
-            swipe = self._swipe(state, landmarks[0][0], now)
+            swipe = self._swipe(state, landmarks[0][0], HandTracker.hand_scale(landmarks), now)
             return (swipe, swipe) if swipe else ("IDLE", "IDLE")
 
         return "IDLE", "IDLE"
@@ -250,22 +250,23 @@ class GestureEngine:
         state.last_click_time = now
         return "CLICK"
 
-    def _swipe(self, state: _HandState, wrist_x: float, now: float) -> Optional[str]:
+    def _swipe(self, state: _HandState, wrist_x: float, scale: float, now: float) -> Optional[str]:
         """
-        Buffer recent wrist X positions and detect left/right swipes.
+        Buffer recent wrist X positions and detect left/right swipes, measured
+        in palm lengths (so distance from the camera does not matter).
         The frame is already mirrored, so +x is the user's right.
         """
         if now - state.last_media_time < self._cfg.MEDIA_COOLDOWN:
             return None
 
         hist = state.wrist_history
-        hist.append(wrist_x)
+        hist.append((wrist_x, scale))
         if len(hist) > self._SWIPE_HISTORY:
             hist.pop(0)
         if len(hist) < self._SWIPE_HISTORY:
             return None
 
-        delta = hist[-1] - hist[0]
+        delta = (hist[-1][0] - hist[0][0]) / hist[-1][1]
         if abs(delta) >= self._SWIPE_DELTA:
             hist.clear()
             state.last_media_time = now

@@ -142,10 +142,10 @@ def test_screenshot_can_be_taken_again_after_releasing(engine, clock):
 
 # ── Swipes ────────────────────────────────────────────────────────────────────
 
-def _swipe(engine, clock, xs):
+def _swipe(engine, clock, xs, scale=1.0):
     out = []
     for x in xs:
-        out.append(engine.classify(make_hand("IP", wrist_x=x), "Right"))
+        out.append(engine.classify(make_hand("IP", wrist_x=x, scale=scale), "Right"))
         engine.end_frame()
         clock.advance(1 / 30)
     return out
@@ -176,3 +176,18 @@ def test_fist_does_nothing_where_window_drag_is_not_implemented(clock):
     cfg.STABILITY_FRAMES = 1
     eng = GestureEngine(cfg, clock=clock)
     assert set(play(eng, clock, make_hand(""), 5)) == {"IDLE"}
+
+
+@pytest.mark.parametrize("scale", [0.4, 1.0, 1.6])
+def test_swipe_distance_is_measured_in_palm_lengths(engine, clock, scale):
+    palm = 0.25 * scale
+    big = [0.30 + i * 0.16 * palm for i in range(7)]           # 0.8 palm lengths in 5 steps
+    assert _swipe(engine, clock, big, scale).count("MEDIA_NEXT") == 1
+
+
+@pytest.mark.parametrize("scale", [0.4, 1.0, 1.6])
+def test_small_hand_wobble_is_not_a_swipe_at_any_distance(engine, clock, scale):
+    palm = 0.25 * scale
+    small = [0.30 + i * 0.04 * palm for i in range(7)]         # 0.2 palm lengths in 5 steps
+    out = _swipe(engine, clock, small, scale)
+    assert "MEDIA_NEXT" not in out and "MEDIA_PREV" not in out

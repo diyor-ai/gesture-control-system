@@ -1,6 +1,7 @@
 """Hand-loss grace period and the state resets main.py relies on."""
 
 import numpy as np
+import pytest
 
 from modules.config import Config
 from modules.gesture_engine import HandLossGrace
@@ -77,3 +78,39 @@ def test_clicks_do_not_move_the_pointer_and_double_click_adds_one_click(gui_stub
     cursor.double_click(hand)
     gui_stubs.pyautogui.click.assert_called_once()
     gui_stubs.pyautogui.doubleClick.assert_not_called()
+
+
+def _moved(landmarks, dy):
+    return [(x, y + dy, z) for x, y, z in landmarks]
+
+
+@pytest.mark.parametrize("scale", [0.4, 1.0, 1.6])
+def test_scroll_distance_is_measured_in_palm_lengths(gui_stubs, scale):
+    from modules.input_backend import PyAutoGUIBackend
+    from modules.scroll_control import ScrollController
+    from tests.conftest import make_hand
+
+    ctrl = ScrollController(Config(), PyAutoGUIBackend())
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    hand = make_hand("IM", scale=scale)
+    palm = 0.25 * scale
+
+    ctrl.scroll(hand, frame)
+    ctrl._last_scroll = 0.0
+    ctrl.scroll(_moved(hand, 1.0 * palm), frame)          # hand dropped by one palm length
+    gui_stubs.pyautogui.scroll.assert_called_once_with(-6)
+
+
+@pytest.mark.parametrize("scale", [0.4, 1.6])
+def test_scroll_jitter_is_ignored_at_any_distance(gui_stubs, scale):
+    from modules.input_backend import PyAutoGUIBackend
+    from modules.scroll_control import ScrollController
+    from tests.conftest import make_hand
+
+    ctrl = ScrollController(Config(), PyAutoGUIBackend())
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    hand = make_hand("IM", scale=scale)
+    ctrl.scroll(hand, frame)
+    ctrl._last_scroll = 0.0
+    ctrl.scroll(_moved(hand, 0.02 * 0.25 * scale), frame)  # 0.02 palm lengths < dead-zone
+    gui_stubs.pyautogui.scroll.assert_not_called()
