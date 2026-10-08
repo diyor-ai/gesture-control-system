@@ -4,13 +4,11 @@ config.py – Central configuration for the Gesture Control System.
 All tunable parameters live here so every module stays in sync.
 """
 
-import screeninfo
-import cv2
-
 
 def _get_screen_resolution() -> tuple[int, int]:
     """Return (width, height) of the primary monitor."""
     try:
+        import screeninfo  # imported lazily so the config loads without a display stack
         monitor = screeninfo.get_monitors()[0]
         return monitor.width, monitor.height
     except Exception:
@@ -59,7 +57,7 @@ class Config:
     DRAW_ERASER_RADIUS     = 30
 
     # ── UI overlay ────────────────────────────────────────────────────────────
-    HUD_FONT               = cv2.FONT_HERSHEY_SIMPLEX  # type: ignore[attr-defined]  # noqa: F821
+    HUD_FONT               = 0             # cv2.FONT_HERSHEY_SIMPLEX (numeric so config needs no OpenCV)
     HUD_SCALE              = 0.65
     HUD_THICKNESS          = 2
     HUD_COLOR_PRIMARY      = (255, 255, 255)

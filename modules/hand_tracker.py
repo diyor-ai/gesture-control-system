@@ -5,8 +5,6 @@ Provides a clean interface for detecting hands and extracting
 normalised landmarks from each frame.
 """
 
-import cv2
-import mediapipe as mp
 import numpy as np
 from typing import List, Tuple, Dict
 from modules.config import Config
@@ -45,6 +43,10 @@ class HandTracker:
     PINKY_MCP      = 17
 
     def __init__(self, cfg: Config) -> None:
+        # Imported here so the pure-geometry helpers (distance, fingers_up)
+        # stay usable, and unit-testable, without OpenCV / MediaPipe installed.
+        import mediapipe as mp
+
         self._cfg = cfg
         self._mp_hands = mp.solutions.hands
         self._mp_draw  = mp.solutions.drawing_utils
@@ -71,6 +73,8 @@ class HandTracker:
                      'label'     ("Left" | "Right")
                      'bbox'      (x_min, y_min, x_max, y_max) in pixels
         """
+        import cv2
+
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = self.hands.process(rgb)
