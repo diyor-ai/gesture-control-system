@@ -101,9 +101,29 @@ def play(engine, clock, hand, frames, label="Right", canvas=False, dt=1 / 30):
     return out
 
 
-@pytest.fixture
-def engine(clock):
+def _make_engine(clock, **overrides):
     from modules.config import Config
     from modules.gesture_engine import GestureEngine
 
-    return GestureEngine(Config(), clock=clock)
+    cfg = Config()
+    for key, value in overrides.items():
+        setattr(cfg, key, value)
+    return GestureEngine(cfg, clock=clock)
+
+
+@pytest.fixture
+def engine(clock):
+    """Engine with the stability layer off (1 frame) so pose tests are immediate."""
+    return _make_engine(clock, STABILITY_FRAMES=1)
+
+
+@pytest.fixture
+def stable_engine(clock):
+    """Engine with the default configuration (stability layer on)."""
+    return _make_engine(clock)
+
+
+@pytest.fixture(params=[1, 3], ids=["stability-1", "stability-3"])
+def engine_any(request, clock):
+    """Engine run both without and with the stability layer."""
+    return _make_engine(clock, STABILITY_FRAMES=request.param)

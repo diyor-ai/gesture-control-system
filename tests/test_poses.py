@@ -77,6 +77,7 @@ def test_two_hands_only_the_primary_drives_the_cursor(engine, clock):
 def test_primary_hand_is_configurable(clock):
     cfg = Config()
     cfg.PRIMARY_HAND = "Left"
+    cfg.STABILITY_FRAMES = 1
     eng = GestureEngine(cfg, clock=clock)
     assert set(play(eng, clock, make_hand("I"), 3, label="Left")) == {"MOVE_CURSOR"}
     assert set(play(eng, clock, make_hand("I"), 3, label="Right")) == {"IDLE"}

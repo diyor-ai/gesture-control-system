@@ -28,6 +28,12 @@ Either hand
 
 Event gestures (clicks, play/pause, screenshot, swipes) are returned exactly
 once; everything else is level-triggered and returned every frame.
+
+Stability: a pose only becomes active after it was seen on
+Config.STABILITY_FRAMES consecutive frames.  While a change is pending the
+engine returns "IDLE", so a flickering classification never dispatches
+half-way gestures.  A hand that disappears keeps its state for
+Config.HAND_LOSS_GRACE_FRAMES frames before it is forgotten.
 """
 
 import time
@@ -48,10 +54,14 @@ class _HandState:
     last_click_time: float = float("-inf")
     last_media_time: float = float("-inf")
     wrist_history: List[float] = field(default_factory=list)
-    prev_pose: str = "IDLE"
-    pose_since: float = 0.0
-    entered: bool = False      # pose changed on this very frame
-    fired: bool = False        # one-shot already emitted for the current pose
+    stable: str = "IDLE"           # the active (debounced) pose
+    pose_since: float = 0.0        # when the active pose was first seen
+    candidate: str = "IDLE"        # pose being counted towards activation
+    candidate_count: int = 0
+    candidate_since: float = 0.0
+    entered: bool = False          # the active pose changed on this very frame
+    fired: bool = False            # one-shot already emitted for the active pose
+    missed: int = 0                # consecutive frames this hand was not visible
 
 
 class GestureEngine:
@@ -96,35 +106,63 @@ class GestureEngine:
         """
         now   = self._clock()
         state = self._states.setdefault(hand_label, _HandState(pose_since=now))
+        state.missed = 0
         first = not self._seen
         self._seen.add(hand_label)
 
         fingers = HandTracker.fingers_up(landmarks)
         is_primary = hand_label == self.primary_hand
-        pose = self._pose(landmarks, fingers, is_primary, canvas_enabled)
+        raw = self._pose(landmarks, fingers, is_primary, canvas_enabled)
+        self._stabilise(state, raw, now)
 
-        state.entered = pose != state.prev_pose
-        if state.entered:
-            state.prev_pose  = pose
-            state.pose_since = now
-            state.fired      = False
-            state.wrist_history.clear()
-
-        gesture, mode = self._resolve(state, pose, landmarks, now)
+        if raw == state.stable:
+            gesture, mode = self._resolve(state, raw, landmarks, now)
+        else:
+            gesture, mode = "IDLE", "IDLE"      # a pose change is pending
 
         if first or mode != "IDLE":
             self.active_mode = mode
         self.debug[hand_label] = {
-            "fingers": fingers, "pose": pose, "gesture": gesture, "primary": is_primary,
+            "fingers": fingers, "raw": raw, "stable": state.stable,
+            "gesture": gesture, "primary": is_primary,
         }
         return gesture
 
     def end_frame(self) -> None:
-        """Call once per camera frame, after every visible hand was classified."""
+        """
+        Call once per camera frame, after every visible hand was classified.
+        Hands that were not seen keep their state for HAND_LOSS_GRACE_FRAMES
+        frames, then are forgotten (so a returning hand starts from scratch).
+        """
         if not self._seen:
             self.active_mode = "IDLE"
+        for label in list(self._states):
+            if label in self._seen:
+                continue
+            self._states[label].missed += 1
+            if self._states[label].missed > self._cfg.HAND_LOSS_GRACE_FRAMES:
+                del self._states[label]
         self.debug = {k: v for k, v in self.debug.items() if k in self._seen}
         self._seen = set()
+
+    # ── Stability layer ────────────────────────────────────────────────────────
+
+    def _stabilise(self, state: _HandState, raw: str, now: float) -> None:
+        """Promote `raw` to the active pose once seen STABILITY_FRAMES times in a row."""
+        if raw == state.candidate:
+            state.candidate_count += 1
+        else:
+            state.candidate       = raw
+            state.candidate_count = 1
+            state.candidate_since = now
+
+        state.entered = False
+        if raw != state.stable and state.candidate_count >= self._cfg.STABILITY_FRAMES:
+            state.stable     = raw
+            state.pose_since = state.candidate_since
+            state.entered    = True
+            state.fired      = False
+            state.wrist_history.clear()
 
     # ── Pose classification (stateless) ───────────────────────────────────────
 

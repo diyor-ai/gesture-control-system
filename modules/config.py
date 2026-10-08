@@ -33,6 +33,8 @@ class Config:
     PRIMARY_HAND           = "Right"       # "Left" | "Right": drives cursor, clicks and drawing
                                            # (the other hand gets ZOOM instead)
 
+    STABILITY_FRAMES       = 3             # consecutive frames a pose must be seen to activate
+
     # ── Cursor movement ───────────────────────────────────────────────────────
     # Fraction of frame used as the active control zone (avoids edge dead-zones)
     CONTROL_ZONE_MARGIN    = 0.15          # 15 % margin on each side
