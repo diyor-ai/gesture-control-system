@@ -21,7 +21,7 @@ Either hand
   SCROLL            – T - | I M up, R P down              (peace sign)
   VOLUME            – T up, P up, I M R down              (hang loose)
   BRIGHTNESS        – T up, R up, I M P down
-  DRAG_WINDOW       – I M R P down (fist, thumb ignored)
+  DRAG_WINDOW       – I M R P down (fist, thumb ignored); Windows/macOS only
   MEDIA_PLAY_PAUSE  – I M R up, P down, held PLAY_PAUSE_HOLD_TIME
   MEDIA_NEXT / PREV – I P up, M R down, then swipe right / left
   SCREENSHOT        – all five fingers up, held SCREENSHOT_HOLD_TIME
@@ -183,7 +183,7 @@ class GestureEngine:
         if thumb and index and middle and ring and pinky:
             return "SCREENSHOT"
         if not (index or middle or ring or pinky):
-            return "DRAG_WINDOW"
+            return "DRAG_WINDOW" if self._cfg.WINDOW_DRAG_ENABLED else "IDLE"
         if thumb and pinky and not (index or middle or ring):
             return "VOLUME"
         if thumb and ring and not (index or middle or pinky):

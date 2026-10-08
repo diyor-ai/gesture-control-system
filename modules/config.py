@@ -5,6 +5,9 @@ All tunable parameters live here so every module stays in sync.
 """
 
 
+import platform
+
+
 def _get_screen_resolution() -> tuple[int, int]:
     """Return (width, height) of the primary monitor (Wayland-safe)."""
     from modules.linux_backends import screen_size
@@ -12,6 +15,12 @@ def _get_screen_resolution() -> tuple[int, int]:
 
 
 class Config:
+    # ── Platform features ─────────────────────────────────────────────────────
+    # Moving another application's window is only implemented for Windows
+    # (win32gui) and macOS (AppleScript). On Linux the fist gesture is disabled
+    # instead of pretending to work.
+    WINDOW_DRAG_ENABLED = platform.system() in ("Windows", "Darwin")
+
     # ── Camera ────────────────────────────────────────────────────────────────
     CAMERA_INDEX  = 0
     FRAME_WIDTH   = 1280

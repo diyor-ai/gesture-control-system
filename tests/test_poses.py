@@ -24,6 +24,12 @@ CONTINUOUS = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _window_drag_available(monkeypatch):
+    """Pose tests assume a platform that supports DRAG_WINDOW."""
+    monkeypatch.setattr(Config, "WINDOW_DRAG_ENABLED", True)
+
+
 @pytest.mark.parametrize("mirror", [False, True], ids=["right-shape", "left-shape"])
 @pytest.mark.parametrize("up,label,expected", CONTINUOUS)
 def test_continuous_gestures(engine, clock, up, label, expected, mirror):
@@ -162,3 +168,11 @@ def test_horns_without_movement_do_nothing(engine, clock):
 def test_unrecognised_pose_is_idle(engine, clock):
     assert set(play(engine, clock, make_hand("M"), 5)) == {"IDLE"}      # lone middle finger
     assert set(play(engine, clock, make_hand("IMRP"), 5)) == {"IDLE"}   # open palm, thumb folded
+
+
+def test_fist_does_nothing_where_window_drag_is_not_implemented(clock):
+    cfg = Config()
+    cfg.WINDOW_DRAG_ENABLED = False
+    cfg.STABILITY_FRAMES = 1
+    eng = GestureEngine(cfg, clock=clock)
+    assert set(play(eng, clock, make_hand(""), 5)) == {"IDLE"}

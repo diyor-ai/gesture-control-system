@@ -49,7 +49,7 @@ This project delivers a **real-time, gesture-driven computer interaction system*
 | 6 | **Screen Scrolling** | Peace sign ✌ + wrist movement | ✅ Mandatory |
 | 7 | **Finger Drawing** | Index only, canvas mode | ✅ Mandatory |
 | 8 | **Screenshot** | All 5 fingers up (hold 1 s) | ✅ Mandatory |
-| 9 | **Window Movement** | Closed fist drag | ✅ Mandatory |
+| 9 | **Window Movement** | Closed fist drag | ⚠️ Windows/macOS only – not available on Linux |
 | 10 | **Zoom In/Out** | Secondary hand L-shape, thumb–index spread | ✅ Mandatory |
 | 11 | **Media Play/Pause** | Index + middle + ring up (hold 0.5 s) | ✅ Mandatory |
 | 12 | **Media Next/Prev** | Index + Pinky 🤘, swipe right / left | ✅ Mandatory |
@@ -117,11 +117,17 @@ A pose must be seen for 3 consecutive frames (`STABILITY_FRAMES`) before it acti
 | Scroll | ✌️ Index + middle up, R P down | Wrist Y movement drives direction |
 | Volume | 🤙 Thumb + pinky up, I M R down | Thumb–pinky distance = volume % |
 | Brightness | Thumb + ring up, I M P down | Thumb–ring distance = brightness % |
-| Drag window | ✊ Fist (I M R P down, thumb any) | Wrist displacement moves the window (Windows/macOS only) |
 | Play/Pause | 🤟 Index + middle + ring up, pinky down | Hold 0.5 s → fires once |
 | Next track | 🤘 Index + pinky up, M R down, swipe **right** | One event per swipe (1 s cooldown) |
 | Previous track | 🤘 Same pose, swipe **left** | One event per swipe |
 | Screenshot | 🖐 All five fingers up | Hold 1 s → fires once, release to re-arm |
+
+> **Drag window (✊ fist) is Windows/macOS only.** It is not implemented on Linux, so there the fist
+> does nothing and is not listed above (`Config.WINDOW_DRAG_ENABLED`). Moving foreign windows is not possible
+> from a normal Wayland client; it would need a compositor-specific extension.
+
+Pinch, volume, brightness and zoom distances are measured in **palm lengths** (wrist → middle-finger base),
+so they work at any distance from the camera. Run with `--debug` to see the live values.
 
 Event gestures (clicks, play/pause, swipes, screenshot) fire once; the rest repeat every frame while held.
 If the hand disappears for up to 5 frames (`HAND_LOSS_GRACE_FRAMES`) nothing is reset; longer and all gesture state is cleared.
@@ -157,7 +163,18 @@ python -c "import mediapipe; print(mediapipe.__version__)"   # expect 0.10.14
 pip install pycaw pywin32
 ```
 
-**Windows/Linux (brightness):**
+**Linux (Fedora):**
+```bash
+sudo dnf install wireplumber brightnessctl     # wpctl (volume) and brightness
+```
+Volume: `wpctl` → `pactl` → `amixer`. Brightness: `brightnessctl` → `xrandr` (software gamma, X11 only).
+Screen size is auto-detected; override with `GESTURE_SCREEN=2560x1440 python main.py`.
+
+> **Wayland:** PyAutoGUI cannot inject pointer or keyboard events into native Wayland sessions
+> (GNOME 50 on Fedora 44 has no Xorg session). Cursor movement and screenshots are therefore not
+> supported there yet – see the Troubleshooting section.
+
+**Windows (brightness):**
 ```bash
 pip install screen-brightness-control
 ```
@@ -213,7 +230,8 @@ gesture_control/
     ├── scroll_control.py    # Page scrolling via wrist velocity
     ├── drawing_canvas.py    # Virtual finger-drawing overlay
     ├── screenshot.py        # Full-screen capture with debounce
-    ├── window_mover.py      # Active window drag (Windows & macOS)
+    ├── window_mover.py      # Active window drag (Windows & macOS only)
+    ├── linux_backends.py    # wpctl/pactl volume, brightnessctl/xrandr brightness, screen size
     ├── zoom_control.py      # Ctrl+Scroll pinch zoom
     ├── media_control.py     # Play/Pause / Next / Prev media keys
     ├── brightness_control.py# Screen brightness (cross-platform)
@@ -265,8 +283,8 @@ Tested on: Intel Core i7-11th Gen, 16 GB RAM, integrated camera (720 p).
 **Volume not changing (Linux)**  
 → Ensure `pulseaudio` or `pipewire-pulse` is running; amixer uses PULSE
 
-**Cursor / screenshot do nothing on Fedora**  
-→ PyAutoGUI needs an X11 session (or XWayland-visible windows); native Wayland may block synthetic input (untested here)
+**Cursor / screenshot do nothing on Fedora (Wayland)**  
+→ Tested on Fedora 44 / GNOME 50: `pyautogui.moveTo()` silently does nothing, `screenshot()` raises (needs `gnome-screenshot`, and GNOME blocks it). Clicks and scrolls only reach XWayland windows. A Wayland input backend (uinput / portal) is planned.
 
 **Window drag not working**  
 → Install `pywin32` (Windows) or ensure Accessibility permissions are granted (macOS)
