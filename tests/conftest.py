@@ -88,3 +88,22 @@ class FakeClock:
 @pytest.fixture
 def clock() -> FakeClock:
     return FakeClock()
+
+
+def play(engine, clock, hand, frames, label="Right", canvas=False, dt=1 / 30):
+    """Feed the same landmarks for `frames` frames; return the gesture of each."""
+    out = []
+    for _ in range(frames):
+        out.append(engine.classify(hand, label, canvas_enabled=canvas))
+        if hasattr(engine, "end_frame"):
+            engine.end_frame()
+        clock.advance(dt)
+    return out
+
+
+@pytest.fixture
+def engine(clock):
+    from modules.config import Config
+    from modules.gesture_engine import GestureEngine
+
+    return GestureEngine(Config(), clock=clock)

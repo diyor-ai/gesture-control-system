@@ -23,7 +23,7 @@ BRIGHTNESS      – Ring + Thumb spread
 """
 
 import time
-from typing import List, Optional
+from typing import Callable, List, Optional
 import numpy as np
 from modules.config import Config
 from modules.hand_tracker import HandTracker
@@ -35,12 +35,14 @@ class GestureEngine:
     gestures that require timing (double-click, screenshot hold, swipe).
     """
 
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, clock: Callable[[], float] = time.monotonic) -> None:
         self._cfg         = cfg
+        self._clock       = clock
         self.active_mode  = "IDLE"
 
         # ── Timing / state ─────────────────────────────────────────────────
-        self._last_click_time   = 0.0
+        self._last_click_time   = float("-inf")
+        self._latched: Optional[str] = None   # click gesture still being held
         self._last_gesture      = ""
         self._screenshot_start  = 0.0
         self._screenshot_fired  = False
@@ -68,7 +70,28 @@ class GestureEngine:
         Returns
         -------
         gesture string, e.g. "CLICK", "SCROLL", "IDLE"
+
+        Click gestures are edge-triggered: CLICK / DOUBLE_CLICK / RIGHT_CLICK
+        are returned once when the pinch starts; while the pinch is held (and
+        until it is released) the engine returns "IDLE".
         """
+        gesture = self._classify_pose(landmarks, hand_label, canvas_enabled)
+
+        if gesture in ("CLICK", "RIGHT_CLICK"):
+            if self._latched == gesture:
+                self.active_mode = "IDLE"
+                return "IDLE"
+            self._latched = gesture
+            if gesture == "CLICK":
+                gesture = self._handle_click()
+            self.active_mode = gesture
+            return gesture
+
+        self._latched = None
+        return gesture
+
+    def _classify_pose(self, landmarks: List[tuple], hand_label: str, canvas_enabled: bool) -> str:
+        """Level-triggered pose classification (one result per frame)."""
         fingers = HandTracker.fingers_up(landmarks)
         dist    = HandTracker.distance
 
@@ -127,9 +150,8 @@ class GestureEngine:
         if index and not middle and not ring and not pinky:
             d_click = dist(thumb_tip, index_tip)
             if d_click < self._cfg.CLICK_THRESHOLD:
-                gesture = self._handle_click()
-                self.active_mode = gesture
-                return gesture
+                self.active_mode = "CLICK"
+                return "CLICK"
 
         # 8. Right-click: middle up, thumb approaching middle tip
         if not index and middle and not ring and not pinky:
@@ -168,16 +190,16 @@ class GestureEngine:
 
     def _handle_click(self) -> str:
         """Distinguish single vs double click based on timing."""
-        now = time.time()
+        now = self._clock()
         if now - self._last_click_time < self._cfg.DOUBLE_CLICK_INTERVAL:
-            self._last_click_time = 0.0  # reset so triple doesn't trigger again
+            self._last_click_time = float("-inf")  # reset so a third pinch starts a new click
             return "DOUBLE_CLICK"
         self._last_click_time = now
         return "CLICK"
 
     def _handle_screenshot(self) -> Optional[str]:
         """Return 'SCREENSHOT' once the gesture has been held long enough."""
-        now = time.time()
+        now = self._clock()
         if self._screenshot_start == 0.0:
             self._screenshot_start = now
             return None
@@ -192,7 +214,7 @@ class GestureEngine:
         Buffer recent wrist X positions and detect left/right swipes.
         Returns 'MEDIA_NEXT', 'MEDIA_PREV', or None.
         """
-        now = time.time()
+        now = self._clock()
         if now - self._last_media_action_time < self._cfg.MEDIA_COOLDOWN:
             return None
 
