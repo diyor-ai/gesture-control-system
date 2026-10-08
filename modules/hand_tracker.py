@@ -141,8 +141,14 @@ class HandTracker:
         pips   = [3, 6, 10, 14, 18]  # joint one below the tip
         up     = []
 
-        # Thumb – compare x-axis (mirrored frame)
-        up.append(landmarks[4][0] > landmarks[3][0])
+        # Thumb – extended when its tip is farther from the pinky base than
+        # its IP joint is.  Unlike an x-axis comparison this works for both
+        # hands and does not depend on which way the palm faces.
+        pinky_mcp = landmarks[17]
+        up.append(
+            HandTracker.distance(landmarks[4], pinky_mcp)
+            > HandTracker.distance(landmarks[3], pinky_mcp)
+        )
 
         # Other fingers – compare y-axis (lower y = higher on screen = extended)
         for tip, pip in zip(tips[1:], pips[1:]):

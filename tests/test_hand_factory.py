@@ -15,3 +15,10 @@ def test_non_thumb_fingers_match_request(up, mirror):
 
 def test_hand_has_21_landmarks():
     assert len(make_hand("IM")) == 21
+
+
+@pytest.mark.parametrize("mirror", [False, True], ids=["right-hand-shape", "left-hand-shape"])
+def test_thumb_detection_works_for_both_hands(mirror):
+    assert HandTracker.fingers_up(make_hand("T", mirror=mirror))[0] is True
+    assert HandTracker.fingers_up(make_hand("", mirror=mirror))[0] is False
+    assert HandTracker.fingers_up(make_hand("TIMRP", mirror=mirror)) == [True] * 5
