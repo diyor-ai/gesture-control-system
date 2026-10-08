@@ -10,6 +10,8 @@ apply() must run before OpenCV, MediaPipe or TensorFlow Lite are imported.
 
 import contextlib
 import os
+import re
+import threading
 import warnings
 
 _FONT_DIRS = ("/usr/share/fonts", "/usr/local/share/fonts")
@@ -28,19 +30,46 @@ def apply() -> None:
     warnings.filterwarnings("ignore", module=r"google\.protobuf.*")
 
 
+# Known-harmless lines the C++ libraries print straight to file descriptor 2.
+# Anything that does not match (camera / model errors, tracebacks) passes through.
+_NOISE = re.compile(
+    r"^(WARNING: All log messages before absl::InitializeLog\(\)"
+    r"|INFO: Created TensorFlow Lite XNNPACK delegate"
+    r"|[IW]0000 .*(gl_context(_egl)?\.cc|inference_feedback_manager\.cc)"
+    r"|QFontDatabase: )"
+)
+
+
+def is_noise(line: str) -> bool:
+    return bool(_NOISE.match(line))
+
+
 @contextlib.contextmanager
-def quiet_stderr():
-    """Send file descriptor 2 to /dev/null (C++ libraries bypass sys.stderr)."""
+def filter_stderr():
+    """
+    Route file descriptor 2 through a filter that drops the known noisy lines
+    and forwards everything else to the real stderr unchanged.
+    """
     try:
         saved = os.dup(2)
-        devnull = os.open(os.devnull, os.O_WRONLY)
+        read_fd, write_fd = os.pipe()
     except OSError:                       # no usable fds (odd embedding): do nothing
         yield
         return
+
+    def pump() -> None:
+        with os.fdopen(read_fd, "rb", closefd=True) as src:
+            for raw in src:
+                if not is_noise(raw.decode("utf-8", "replace")):
+                    os.write(saved, raw)
+
+    thread = threading.Thread(target=pump, daemon=True)
+    thread.start()
+    os.dup2(write_fd, 2)
     try:
-        os.dup2(devnull, 2)
         yield
     finally:
-        os.dup2(saved, 2)
+        os.dup2(saved, 2)                 # restore first so a traceback is never filtered
+        os.close(write_fd)                # EOF for the pump
+        thread.join(timeout=2)
         os.close(saved)
-        os.close(devnull)

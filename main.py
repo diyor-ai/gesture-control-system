@@ -69,8 +69,7 @@ def main(debug: bool = False) -> None:
     print(f"[INFO] Input backend: {backend.name}")
 
     # ── Initialise modules ────────────────────────────────────────────────────
-    with quiet_logs.quiet_stderr():          # MediaPipe / TFLite print C++ log lines here
-        tracker = HandTracker(cfg)
+    tracker    = HandTracker(cfg)
     cursor     = CursorController(cfg, backend)
     engine     = GestureEngine(cfg)
     volume     = VolumeController(cfg)
@@ -93,136 +92,140 @@ def main(debug: bool = False) -> None:
     print("[INFO] Press 'd' to toggle drawing canvas.")
     print("[INFO] Press 'r' to clear the drawing canvas.")
 
-    while True:
-        try:
-            frame = read_frame(cap, cfg.CAMERA_MAX_READ_FAILURES, cfg.CAMERA_RETRY_DELAY)
-        except CameraError as exc:
-            print(f"[ERROR] {exc}")
-            cap.release()
-            cv2.destroyAllWindows()
-            sys.exit(1)
+    try:
+        while True:
+            try:
+                frame = read_frame(cap, cfg.CAMERA_MAX_READ_FAILURES, cfg.CAMERA_RETRY_DELAY)
+            except CameraError as exc:
+                print(f"[ERROR] {exc}")
+                cap.release()
+                cv2.destroyAllWindows()
+                sys.exit(1)
 
-        # Mirror so the display feels natural
-        frame = cv2.flip(frame, 1)
+            # Mirror so the display feels natural
+            frame = cv2.flip(frame, 1)
 
-        # ── Hand detection & landmark extraction ──────────────────────────────
-        frame, hands_data = tracker.process(frame)
+            # ── Hand detection & landmark extraction ──────────────────────────────
+            frame, hands_data = tracker.process(frame)
 
-        # ── FPS calculation ───────────────────────────────────────────────────
-        now = time.time()
-        fps = 1.0 / max(now - prev_time, 1e-6)
-        prev_time = now
-        fps_values.append(fps)
-        if len(fps_values) > 30:
-            fps_values.pop(0)
-        avg_fps = sum(fps_values) / len(fps_values)
+            # ── FPS calculation ───────────────────────────────────────────────────
+            now = time.time()
+            fps = 1.0 / max(now - prev_time, 1e-6)
+            prev_time = now
+            fps_values.append(fps)
+            if len(fps_values) > 30:
+                fps_values.pop(0)
+            avg_fps = sum(fps_values) / len(fps_values)
 
-        active: set = set()                              # gestures seen this frame
+            active: set = set()                              # gestures seen this frame
 
-        if hands_data:
-            for hand_info in hands_data:
-                landmarks = hand_info["landmarks"]
-                hand_label = hand_info["label"]          # "Left" | "Right"
+            if hands_data:
+                for hand_info in hands_data:
+                    landmarks = hand_info["landmarks"]
+                    hand_label = hand_info["label"]          # "Left" | "Right"
 
-                # ── Classify current gesture ──────────────────────────────────
-                gesture = engine.classify(landmarks, hand_label, canvas_enabled=canvas._enabled)
-                active.add(gesture)
+                    # ── Classify current gesture ──────────────────────────────────
+                    gesture = engine.classify(landmarks, hand_label, canvas_enabled=canvas._enabled)
+                    active.add(gesture)
 
-                # ── Module dispatch ───────────────────────────────────────────
-                if gesture == "MOVE_CURSOR":
-                    cursor.move(landmarks)
+                    # ── Module dispatch ───────────────────────────────────────────
+                    if gesture == "MOVE_CURSOR":
+                        cursor.move(landmarks)
 
-                elif gesture == "CLICK":
-                    cursor.click(landmarks)
+                    elif gesture == "CLICK":
+                        cursor.click(landmarks)
 
-                elif gesture == "DOUBLE_CLICK":
-                    cursor.double_click(landmarks)
+                    elif gesture == "DOUBLE_CLICK":
+                        cursor.double_click(landmarks)
 
-                elif gesture == "RIGHT_CLICK":
-                    cursor.right_click(landmarks)
+                    elif gesture == "RIGHT_CLICK":
+                        cursor.right_click(landmarks)
 
-                elif gesture == "SCROLL":
-                    scroller.scroll(landmarks, frame)
+                    elif gesture == "SCROLL":
+                        scroller.scroll(landmarks, frame)
 
-                elif gesture == "VOLUME":
-                    volume.adjust(landmarks, frame)
+                    elif gesture == "VOLUME":
+                        volume.adjust(landmarks, frame)
 
-                elif gesture == "DRAW":
-                    canvas.draw(landmarks, frame)
+                    elif gesture == "DRAW":
+                        canvas.draw(landmarks, frame)
 
-                elif gesture == "SCREENSHOT":
-                    screenshot.capture(frame)
+                    elif gesture == "SCREENSHOT":
+                        screenshot.capture(frame)
 
-                elif gesture == "DRAG_WINDOW":
-                    win_mover.drag(landmarks)
+                    elif gesture == "DRAG_WINDOW":
+                        win_mover.drag(landmarks)
 
-                elif gesture == "ZOOM":
-                    zoomer.pinch_zoom(landmarks, frame)
+                    elif gesture == "ZOOM":
+                        zoomer.pinch_zoom(landmarks, frame)
 
-                elif gesture == "MEDIA_PLAY_PAUSE":
-                    media.toggle_play_pause()
+                    elif gesture == "MEDIA_PLAY_PAUSE":
+                        media.toggle_play_pause()
 
-                elif gesture == "MEDIA_NEXT":
-                    media.next_track()
+                    elif gesture == "MEDIA_NEXT":
+                        media.next_track()
 
-                elif gesture == "MEDIA_PREV":
-                    media.prev_track()
+                    elif gesture == "MEDIA_PREV":
+                        media.prev_track()
 
-                elif gesture == "BRIGHTNESS":
-                    brightness.adjust(landmarks, frame)
+                    elif gesture == "BRIGHTNESS":
+                        brightness.adjust(landmarks, frame)
 
-                # ── Draw gesture label on frame ───────────────────────────────
-                overlay.draw_gesture_label(frame, gesture, hand_label)
+                    # ── Draw gesture label on frame ───────────────────────────────
+                    overlay.draw_gesture_label(frame, gesture, hand_label)
 
-            # A gesture that is no longer active must not leave stale state
-            # behind (previous wrist position, pinch distance, pen position...)
-            if "SCROLL" not in active:
+                # A gesture that is no longer active must not leave stale state
+                # behind (previous wrist position, pinch distance, pen position...)
+                if "SCROLL" not in active:
+                    scroller.reset()
+                if "ZOOM" not in active:
+                    zoomer.reset()
+                if "DRAG_WINDOW" not in active:
+                    win_mover.on_hand_lost()
+                if "DRAW" not in active:
+                    canvas.on_hand_lost()
+
+            engine.end_frame()
+
+            # Hand-loss recovery: ignore dropouts shorter than the grace period,
+            # then reset every stateful module once.
+            if hand_loss.update(bool(hands_data)):
+                cursor.on_hand_lost()
                 scroller.reset()
-            if "ZOOM" not in active:
                 zoomer.reset()
-            if "DRAG_WINDOW" not in active:
                 win_mover.on_hand_lost()
-            if "DRAW" not in active:
                 canvas.on_hand_lost()
 
-        engine.end_frame()
+            # ── Draw persistent canvas layer ──────────────────────────────────────
+            frame = canvas.render(frame)
 
-        # Hand-loss recovery: ignore dropouts shorter than the grace period,
-        # then reset every stateful module once.
-        if hand_loss.update(bool(hands_data)):
-            cursor.on_hand_lost()
-            scroller.reset()
-            zoomer.reset()
-            win_mover.on_hand_lost()
-            canvas.on_hand_lost()
+            # ── HUD overlay (FPS, active mode, instructions) ──────────────────────
+            overlay.draw_hud(frame, avg_fps, engine.active_mode)
+            if debug:
+                overlay.draw_debug(frame, engine.debug, fps, avg_fps)
 
-        # ── Draw persistent canvas layer ──────────────────────────────────────
-        frame = canvas.render(frame)
+            cv2.imshow("Gesture Control System", frame)
 
-        # ── HUD overlay (FPS, active mode, instructions) ──────────────────────
-        overlay.draw_hud(frame, avg_fps, engine.active_mode)
-        if debug:
-            overlay.draw_debug(frame, engine.debug, fps, avg_fps)
-
-        cv2.imshow("Gesture Control System", frame)
-
-        # ── Keyboard shortcuts ────────────────────────────────────────────────
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord("q"):
-            break
-        elif key == ord("d"):
-            canvas.toggle()
-        elif key == ord("r"):
-            canvas.clear()
-
-    # ── Clean up ──────────────────────────────────────────────────────────────
-    cap.release()
-    cv2.destroyAllWindows()
-    volume.close()
-    brightness.close()
-    backend.close()
+            # ── Keyboard shortcuts ────────────────────────────────────────────────
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
+            elif key == ord("d"):
+                canvas.toggle()
+            elif key == ord("r"):
+                canvas.clear()
+    except KeyboardInterrupt:
+        print("\n[INFO] Ctrl+C received, shutting down.")
+    finally:
+        for close in (cap.release, cv2.destroyAllWindows, tracker.hands.close, volume.close,
+                      brightness.close, backend.close):
+            try:
+                close()
+            except Exception as exc:
+                print(f"[WARN] Cleanup step failed: {exc}")
     print("[INFO] Gesture Control System shut down cleanly.")
 
 
 if __name__ == "__main__":
-    main(debug=parse_args().debug)
+    with quiet_logs.filter_stderr():         # drop known C++ log noise, keep real errors
+        main(debug=parse_args().debug)
