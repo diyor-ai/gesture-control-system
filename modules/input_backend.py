@@ -15,7 +15,9 @@ project does not care which backend is active:
     scroll(clicks)      positive = up
     ctrl_scroll(clicks) scroll with Ctrl held (browser / editor zoom)
     press_media(name)   "playpause" | "nexttrack" | "prevtrack"
-    screenshot(path)    save the whole screen, return True on success
+    screenshot(path)    save the whole screen, return True on success; a backend
+                        that cannot choose the file sets `screenshot_location`
+                        (a human-readable folder) so the user is told where it went
     close()
 """
 
@@ -30,13 +32,18 @@ SYN_REPORT = 0
 ABS_X, ABS_Y = 0x00, 0x01
 REL_WHEEL, REL_WHEEL_HI_RES = 0x08, 0x0B
 BTN_LEFT, BTN_RIGHT = 0x110, 0x111
-KEY_LEFTCTRL = 29
+KEY_LEFTCTRL, KEY_LEFTSHIFT, KEY_LEFTALT, KEY_LEFTMETA, KEY_SYSRQ = 29, 42, 56, 125, 99
 KEY_NEXTSONG, KEY_PLAYPAUSE, KEY_PREVIOUSSONG = 163, 164, 165
 
 _MEDIA_KEYS = {
     "playpause": KEY_PLAYPAUSE,
     "nexttrack": KEY_NEXTSONG,
     "prevtrack": KEY_PREVIOUSSONG,
+}
+# Config.SCREENSHOT_KEYS names -> key codes (KEY_SYSRQ is the Print Screen key)
+_KEY_NAMES = {
+    "ctrl": KEY_LEFTCTRL, "shift": KEY_LEFTSHIFT, "alt": KEY_LEFTALT,
+    "super": KEY_LEFTMETA, "print": KEY_SYSRQ,
 }
 _HI_RES_PER_NOTCH = 120
 
@@ -97,10 +104,18 @@ class UInputBackend:
 
     name = "uinput"
 
-    def __init__(self, screen_w: int, screen_h: int, device=None) -> None:
+    def __init__(self, screen_w: int, screen_h: int, device=None,
+                 screenshot_keys=(), screenshot_dir: str = "~/Pictures/Screenshots") -> None:
         """`device` (anything with write(type, code, value) and syn()) is for tests."""
         self._w = max(int(screen_w), 2)
         self._h = max(int(screen_h), 2)
+        self._shot_keys = tuple(screenshot_keys)
+        unknown = [k for k in self._shot_keys if k not in _KEY_NAMES]
+        if unknown:
+            raise InputBackendError(
+                f"Unknown key(s) in SCREENSHOT_KEYS: {unknown} (use {sorted(_KEY_NAMES)})")
+        self.screenshot_location = None
+        self._screenshot_dir = screenshot_dir
         self._dev = device if device is not None else _open_uinput_device(self._w, self._h)
 
     def move_to(self, x: int, y: int) -> None:
@@ -142,7 +157,26 @@ class UInputBackend:
         code = _MEDIA_KEYS[name]
         self._button(code)
 
+    def press_keys(self, names) -> None:
+        """Press the named keys together, then release them in reverse order."""
+        codes = [_KEY_NAMES[n] for n in names]
+        try:
+            for code in codes:
+                self._dev.write(EV_KEY, code, 1)
+                self._dev.syn()
+        finally:
+            for code in reversed(codes):
+                self._dev.write(EV_KEY, code, 0)
+                self._dev.syn()
+
     def screenshot(self, path: str) -> bool:
+        # GNOME/Wayland blocks gnome-screenshot, so use GNOME's own shortcut.
+        # The file lands in GNOME's folder and cannot be verified from here.
+        if self._shot_keys and is_gnome_wayland():
+            self.press_keys(self._shot_keys)
+            self.screenshot_location = os.path.expanduser(self._screenshot_dir)
+            return True
+        self.screenshot_location = None
         from modules import linux_backends
         return linux_backends.take_screenshot(path)
 
@@ -162,7 +196,7 @@ def _open_uinput_device(width: int, height: int):
         ) from exc
 
     capabilities = {
-        EV_KEY: [BTN_LEFT, BTN_RIGHT, KEY_LEFTCTRL, *_MEDIA_KEYS.values()],
+        EV_KEY: [BTN_LEFT, BTN_RIGHT, *_KEY_NAMES.values(), *_MEDIA_KEYS.values()],
         EV_REL: [REL_WHEEL, REL_WHEEL_HI_RES],
         EV_ABS: [
             (ABS_X, AbsInfo(value=0, min=0, max=width - 1, fuzz=0, flat=0, resolution=0)),
@@ -188,6 +222,10 @@ def is_wayland() -> bool:
     return platform.system() == "Linux" and os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
 
 
+def is_gnome_wayland() -> bool:
+    return is_wayland() and "gnome" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+
+
 def create_backend(cfg, choice: Optional[str] = None):
     """
     Pick the input backend.  `choice` / $GESTURE_INPUT / cfg.INPUT_BACKEND is
@@ -202,7 +240,8 @@ def create_backend(cfg, choice: Optional[str] = None):
         return PyAutoGUIBackend()
 
     try:
-        return UInputBackend(cfg.SCREEN_W, cfg.SCREEN_H)
+        return UInputBackend(cfg.SCREEN_W, cfg.SCREEN_H,
+                             screenshot_keys=cfg.SCREENSHOT_KEYS)
     except InputBackendError as exc:
         if choice == "uinput":
             raise

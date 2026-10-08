@@ -83,6 +83,12 @@ class Config:
 
     # ── Screenshot ────────────────────────────────────────────────────────────
     SCREENSHOT_SAVE_DIR    = "screenshots"
+    SCREENSHOT_COOLDOWN    = 5.0           # seconds before another screenshot is allowed
+    # GNOME on Wayland refuses programmatic screenshots, so the uinput backend
+    # types GNOME's own shortcut instead (gsettings get org.gnome.shell.keybindings
+    # screenshot).  Names: ctrl, shift, alt, super, print.  Empty tuple = disabled.
+    # GNOME saves these to ~/Pictures/Screenshots, not to SCREENSHOT_SAVE_DIR.
+    SCREENSHOT_KEYS        = ("shift", "print")
 
     # ── Media keys ────────────────────────────────────────────────────────────
     MEDIA_COOLDOWN         = 1.0           # seconds between media key presses

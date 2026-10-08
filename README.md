@@ -42,7 +42,7 @@ Python 3.11 is what I develop on; MediaPipe 0.10.14 supports 3.9–3.12. On Linu
 | Brightness | either | Thumb + ring up, I M P down | Thumb–ring spread = min–max |
 | Play / pause | either | Index + middle + ring up, pinky down | Hold 0.5 s, fires once |
 | Next / previous track | either | Index + pinky up, M R down, swipe right / left | One event per swipe, 1 s cooldown |
-| Screenshot | either | All five fingers up | Hold 1 s, fires once, saved to `screenshots/` |
+| Screenshot | either | All five fingers up | Hold 1 s, fires once, 5 s cooldown. Saved to `screenshots/`; on GNOME/Wayland GNOME saves it to `~/Pictures/Screenshots` |
 
 Fist drags the active window on Windows and macOS only; it is disabled on Linux (`WINDOW_DRAG_ENABLED`).
 
@@ -116,6 +116,8 @@ Everything is in `modules/config.py`. Distances are in palm lengths.
 | `CLICK_THRESHOLD` | 0.20 | Maximum thumb-to-fingertip distance for a pinch |
 | `DOUBLE_CLICK_INTERVAL` | 0.40 s | Maximum time between two pinch starts |
 | `SCREENSHOT_HOLD_TIME` / `PLAY_PAUSE_HOLD_TIME` | 1.0 s / 0.5 s | Hold time before firing |
+| `SCREENSHOT_COOLDOWN` | 5.0 s | Minimum time between screenshots |
+| `SCREENSHOT_KEYS` | `("shift", "print")` | GNOME/Wayland: shortcut typed through uinput (`gsettings get org.gnome.shell.keybindings screenshot`) |
 | `VOLUME_MIN_DIST` / `MAX_DIST` | 0.10 / 1.60 | Thumb–pinky spread mapped to 0–100 % |
 | `BRIGHTNESS_MIN_DIST` / `MAX_DIST` | 0.10 / 1.30 | Thumb–ring spread mapped to min–max |
 | `VOLUME_STEP` / `BRIGHTNESS_STEP` | 0.03 | Minimum change before the OS is touched |
@@ -153,7 +155,7 @@ Members of `uinput` can inject input events but cannot read them. To undo: `sudo
 
 - **Camera not found / "no frames" error:** the app gives up after 30 failed reads (about 3 s). Try another `CAMERA_INDEX`.
 - **Pointer does not move on Wayland:** the start-up line should read `Input backend: uinput`. If it says `pyautogui`, redo the Wayland setup and log in again.
-- **Screenshot fails:** install `gnome-screenshot`.
+- **Screenshot on GNOME/Wayland:** `gnome-screenshot` is blocked there, so the uinput backend types the shortcut in `SCREENSHOT_KEYS`; the file is in `~/Pictures/Screenshots`. Elsewhere install `gnome-screenshot` (or `grim` on wlroots).
 - **Brightness has no effect:** install `brightnessctl`; the `xrandr` fallback is unlikely to work on Wayland.
 - **Cursor stops or clicks land on the wrong hand:** MediaPipe's Left/Right label can flip; check it with `--debug` or change `PRIMARY_HAND`.
 - **Low FPS:** run `python tools/benchmark_fps.py` to separate camera and tracking cost.

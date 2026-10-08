@@ -155,3 +155,40 @@ def test_permission_error_points_to_the_setup(monkeypatch):
     monkeypatch.setattr(evdev, "UInput", denied)
     with pytest.raises(ib.InputBackendError, match="uinput. group"):
         ib._open_uinput_device(1920, 1080)
+
+
+def test_press_keys_holds_the_combo_and_releases_in_reverse(backend, dev):
+    backend.press_keys(("shift", "print"))
+    keys = [e for e in dev.events if e != "SYN"]
+    assert keys == [(ib.EV_KEY, ib.KEY_LEFTSHIFT, 1), (ib.EV_KEY, ib.KEY_SYSRQ, 1),
+                    (ib.EV_KEY, ib.KEY_SYSRQ, 0), (ib.EV_KEY, ib.KEY_LEFTSHIFT, 0)]
+
+
+def test_unknown_screenshot_key_is_rejected_up_front(dev):
+    with pytest.raises(ib.InputBackendError):
+        ib.UInputBackend(1920, 1080, device=dev, screenshot_keys=("shift", "prtsc"))
+
+
+def test_gnome_wayland_screenshot_types_the_shortcut_instead_of_a_tool(monkeypatch, dev, tmp_path):
+    monkeypatch.setattr(ib, "is_gnome_wayland", lambda: True)
+    called = []
+    monkeypatch.setattr("modules.linux_backends.take_screenshot", lambda p: called.append(p) or True)
+    b = ib.UInputBackend(1920, 1080, device=dev, screenshot_keys=("shift", "print"))
+    assert b.screenshot(str(tmp_path / "x.png")) is True
+    assert (ib.EV_KEY, ib.KEY_SYSRQ, 1) in dev.events
+    assert called == [] and b.screenshot_location.endswith("Pictures/Screenshots")
+
+
+def test_other_desktops_fall_back_to_the_screenshot_tools(monkeypatch, dev, tmp_path):
+    monkeypatch.setattr(ib, "is_gnome_wayland", lambda: False)
+    monkeypatch.setattr("modules.linux_backends.take_screenshot", lambda p: True)
+    b = ib.UInputBackend(1920, 1080, device=dev, screenshot_keys=("shift", "print"))
+    assert b.screenshot(str(tmp_path / "x.png")) is True
+    assert dev.events == [] and b.screenshot_location is None
+
+
+def test_empty_screenshot_keys_disable_the_shortcut(monkeypatch, dev, tmp_path):
+    monkeypatch.setattr(ib, "is_gnome_wayland", lambda: True)
+    monkeypatch.setattr("modules.linux_backends.take_screenshot", lambda p: False)
+    b = ib.UInputBackend(1920, 1080, device=dev)
+    assert b.screenshot(str(tmp_path / "x.png")) is False and dev.events == []

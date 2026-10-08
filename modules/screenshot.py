@@ -20,12 +20,13 @@ class ScreenshotModule:
         self._save_dir = cfg.SCREENSHOT_SAVE_DIR
         os.makedirs(self._save_dir, exist_ok=True)
         self._last_capture = 0.0
-        self._COOLDOWN     = 3.0   # seconds before another screenshot is allowed
+        self._COOLDOWN     = cfg.SCREENSHOT_COOLDOWN
 
     def capture(self, frame: np.ndarray) -> None:
         """Take a screenshot and save it. Debounced by COOLDOWN."""
         now = time.time()
         if now - self._last_capture < self._COOLDOWN:
+            print(f"[INFO] Screenshot ignored (cooldown, {now - self._last_capture:.1f}s since last)")
             return
 
         self._last_capture = now
@@ -36,7 +37,11 @@ class ScreenshotModule:
             print("[Screenshot] Failed – on GNOME/Wayland install gnome-screenshot "
                   "(sudo dnf install gnome-screenshot)")
             return
-        print(f"[Screenshot] Saved → {path}")
+        folder = getattr(self._input, "screenshot_location", None)
+        if folder:
+            print(f"[Screenshot] Taken with the GNOME shortcut → saved in {folder}")
+        else:
+            print(f"[Screenshot] Saved → {path}")
 
         # Flash white on the camera frame as confirmation
         white = np.ones_like(frame, dtype=np.uint8) * 255

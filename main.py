@@ -8,6 +8,9 @@ Course  : Final Assessment Project
 Entry point – initialises all modules and runs the main event loop.
 """
 
+from modules import quiet_logs
+quiet_logs.apply()          # must precede the OpenCV / MediaPipe imports below
+
 import argparse
 import cv2
 import time
@@ -66,7 +69,8 @@ def main(debug: bool = False) -> None:
     print(f"[INFO] Input backend: {backend.name}")
 
     # ── Initialise modules ────────────────────────────────────────────────────
-    tracker    = HandTracker(cfg)
+    with quiet_logs.quiet_stderr():          # MediaPipe / TFLite print C++ log lines here
+        tracker = HandTracker(cfg)
     cursor     = CursorController(cfg, backend)
     engine     = GestureEngine(cfg)
     volume     = VolumeController(cfg)
