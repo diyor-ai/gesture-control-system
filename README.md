@@ -43,19 +43,19 @@ This project delivers a **real-time, gesture-driven computer interaction system*
 |---|---------|---------|--------|
 | 1 | **Cursor Movement** | Index finger extended | ✅ Core |
 | 2 | **Single Click** | Index + Thumb pinch | ✅ Core |
-| 3 | **Double Click** | Two rapid pinches | ✅ Core |
+| 3 | **Double Click** | Two separate pinches within 0.40 s | ✅ Core |
 | 4 | **Right Click** | Middle + Thumb pinch | ✅ Core |
 | 5 | **Volume Control** | Thumb + Pinky spread 🤙 | ✅ Mandatory |
 | 6 | **Screen Scrolling** | Peace sign ✌ + wrist movement | ✅ Mandatory |
 | 7 | **Finger Drawing** | Index only, canvas mode | ✅ Mandatory |
-| 8 | **Screenshot** | All 5 fingers spread (hold 1 s) | ✅ Mandatory |
+| 8 | **Screenshot** | All 5 fingers up (hold 1 s) | ✅ Mandatory |
 | 9 | **Window Movement** | Closed fist drag | ✅ Mandatory |
-| 10 | **Zoom In/Out** | Thumb + Index pinch spread | ✅ Mandatory |
-| 11 | **Media Play/Pause** | Flat palm | ✅ Mandatory |
-| 12 | **Media Next/Prev** | Index + Pinky swipe (🤘) | ✅ Mandatory |
+| 10 | **Zoom In/Out** | Secondary hand L-shape, thumb–index spread | ✅ Mandatory |
+| 11 | **Media Play/Pause** | Index + middle + ring up (hold 0.5 s) | ✅ Mandatory |
+| 12 | **Media Next/Prev** | Index + Pinky 🤘, swipe right / left | ✅ Mandatory |
 | 13 | **Brightness Control** | Thumb + Ring spread | ✅ Advanced |
 | 14 | **Hand-Loss Recovery** | Automatic freeze on hand loss | ✅ Advanced |
-| 15 | **Multi-Hand Support** | Up to 2 hands simultaneously | ✅ Advanced |
+| 15 | **Multi-Hand Support** | Up to 2 hands; primary hand = cursor, other = zoom | ✅ Advanced |
 | 16 | **Real-time HUD** | FPS · mode · shortcuts overlay | ✅ Advanced |
 
 ---
@@ -91,22 +91,40 @@ Each module is **independent and stateless-by-design** — the engine calls only
 
 ## 🤚 Gesture Reference
 
-| Gesture | Hand Shape | Notes |
-|---------|-----------|-------|
-| Move cursor | ☝️ Index only | Maps to full screen |
-| Click | Pinch index+thumb | < 4 % distance threshold |
-| Double click | Two rapid pinches | < 350 ms apart |
-| Right click | Pinch middle+thumb | — |
-| Scroll | ✌️ Peace sign | Wrist Y velocity drives direction |
-| Volume | 🤙 Hang loose | Thumb–Pinky distance = volume % |
-| Draw | ☝️ Index only (draw mode) | Toggle with `d` key |
-| Screenshot | 🖐 All 5 fingers | Hold ≥ 1 second |
-| Drag window | ✊ Closed fist | Wrist displacement moves window |
-| Zoom | 🤏 Pinch spread | Ctrl + Scroll simulation |
-| Play/Pause | 🖐 Flat palm | Debounced 1 s |
-| Next track | 🤘 Swipe right | Index + Pinky, swipe gesture |
-| Prev track | 🤘 Swipe left | Index + Pinky, swipe gesture |
-| Brightness | Thumb + Ring | Right-hand bar indicator |
+Every gesture has its own pose. `T I M R P` = thumb, index, middle, ring, pinky; "any" = not checked.
+A pose must be seen for 3 consecutive frames (`STABILITY_FRAMES`) before it activates.
+
+**Primary hand** (`PRIMARY_HAND`, default **Right**) – the only hand that drives the cursor
+
+| Gesture | Pose | Behaviour |
+|---------|------|-----------|
+| Move cursor | ☝️ Index up, M R P down, thumb any (L-shape is fine) | Fingertip → screen, smoothed |
+| Click | Same pose, thumb tip pinched onto index tip | **One** click when the pinch starts; release before the next |
+| Double click | Two separate pinches within 0.40 s (`DOUBLE_CLICK_INTERVAL`) | Second pinch completes the double click |
+| Right click | Only middle up, thumb tip pinched onto middle tip | One click per pinch |
+| Draw | ☝️ Index pose while the canvas is on (`d`) | Replaces MOVE_CURSOR while drawing |
+
+**Secondary hand** (the other one)
+
+| Gesture | Pose | Behaviour |
+|---------|------|-----------|
+| Zoom | 👆 L-shape: thumb + index up, M R P down | Thumb–index spread → Ctrl + scroll |
+
+**Either hand**
+
+| Gesture | Pose | Behaviour |
+|---------|------|-----------|
+| Scroll | ✌️ Index + middle up, R P down | Wrist Y movement drives direction |
+| Volume | 🤙 Thumb + pinky up, I M R down | Thumb–pinky distance = volume % |
+| Brightness | Thumb + ring up, I M P down | Thumb–ring distance = brightness % |
+| Drag window | ✊ Fist (I M R P down, thumb any) | Wrist displacement moves the window (Windows/macOS only) |
+| Play/Pause | 🤟 Index + middle + ring up, pinky down | Hold 0.5 s → fires once |
+| Next track | 🤘 Index + pinky up, M R down, swipe **right** | One event per swipe (1 s cooldown) |
+| Previous track | 🤘 Same pose, swipe **left** | One event per swipe |
+| Screenshot | 🖐 All five fingers up | Hold 1 s → fires once, release to re-arm |
+
+Event gestures (clicks, play/pause, swipes, screenshot) fire once; the rest repeat every frame while held.
+If the hand disappears for up to 5 frames (`HAND_LOSS_GRACE_FRAMES`) nothing is reset; longer and all gesture state is cleared.
 
 ---
 
@@ -158,6 +176,17 @@ python main.py
 | `d` | Toggle drawing canvas on/off |
 | `r` | Clear the drawing canvas |
 
+```bash
+python main.py --debug     # overlay: finger states, raw/stable pose, gesture, FPS
+```
+
+### Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest                     # no camera needed – uses synthetic landmarks
+```
+
 The HUD in the top bar shows the current FPS and active gesture mode in real time.
 
 ---
@@ -168,12 +197,16 @@ The HUD in the top bar shows the current FPS and active gesture mode in real tim
 gesture_control/
 ├── main.py                  # Entry point – camera loop & module orchestration
 ├── requirements.txt         # Python dependencies
+├── requirements-dev.txt     # + pytest
+├── tests/                   # Unit tests (synthetic landmarks)
 ├── screenshots/             # Auto-created; screenshot captures saved here
 └── modules/
     ├── __init__.py
     ├── config.py            # All tuneable parameters in one place
     ├── hand_tracker.py      # MediaPipe Hands wrapper
-    ├── gesture_engine.py    # Stateful gesture classifier (14 gestures)
+    ├── gesture_engine.py    # Per-hand, debounced gesture classifier
+    ├── camera.py            # Frame reading with a bounded retry budget
+    ├── system_worker.py     # Step filter + background worker for volume/brightness
     ├── cursor_controller.py # Smooth cursor + click actions
     ├── volume_control.py    # System volume via thumb–pinky distance
     ├── scroll_control.py    # Page scrolling via wrist velocity
@@ -195,7 +228,10 @@ All parameters are centralised in `modules/config.py`. Key settings:
 ```python
 SMOOTHING_FACTOR       = 0.30    # cursor EMA weight (lower → smoother)
 CLICK_THRESHOLD        = 0.04    # normalised pinch distance for click
-DOUBLE_CLICK_INTERVAL  = 0.35   # seconds between clicks → double click
+DOUBLE_CLICK_INTERVAL  = 0.40   # max seconds between two pinch starts → double click
+PRIMARY_HAND           = "Right" # hand that moves the cursor / clicks / draws
+STABILITY_FRAMES       = 3      # frames a pose must persist before it activates
+HAND_LOSS_GRACE_FRAMES = 5      # dropout frames tolerated before state is reset
 SCREENSHOT_HOLD_TIME   = 1.0    # seconds to hold 5-finger gesture
 CONTROL_ZONE_MARGIN    = 0.15   # dead-zone fraction at frame edges
 ```
@@ -227,6 +263,9 @@ Tested on: Intel Core i7-11th Gen, 16 GB RAM, integrated camera (720 p).
 
 **Volume not changing (Linux)**  
 → Ensure `pulseaudio` or `pipewire-pulse` is running; amixer uses PULSE
+
+**Cursor / screenshot do nothing on Fedora**  
+→ PyAutoGUI needs an X11 session (or XWayland-visible windows); native Wayland may block synthetic input (untested here)
 
 **Window drag not working**  
 → Install `pywin32` (Windows) or ensure Accessibility permissions are granted (macOS)
