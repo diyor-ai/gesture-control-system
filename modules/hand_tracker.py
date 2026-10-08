@@ -54,6 +54,7 @@ class HandTracker:
 
         self.hands = self._mp_hands.Hands(
             static_image_mode=False,
+            model_complexity=cfg.MODEL_COMPLEXITY,
             max_num_hands=cfg.MAX_NUM_HANDS,
             min_detection_confidence=cfg.DETECTION_CONFIDENCE,
             min_tracking_confidence=cfg.TRACKING_CONFIDENCE,

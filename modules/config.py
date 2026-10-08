@@ -26,8 +26,8 @@ class Config:
 
     # ── Camera ────────────────────────────────────────────────────────────────
     CAMERA_INDEX  = 0
-    FRAME_WIDTH   = 1280
-    FRAME_HEIGHT  = 720
+    FRAME_WIDTH   = 640
+    FRAME_HEIGHT  = 480
     TARGET_FPS    = 30
     CAMERA_MAX_READ_FAILURES = 30          # consecutive failed reads before giving up
     CAMERA_RETRY_DELAY       = 0.1         # seconds between retries
@@ -36,6 +36,7 @@ class Config:
     SCREEN_W, SCREEN_H = _get_screen_resolution()
 
     # ── MediaPipe hand detection ───────────────────────────────────────────────
+    MODEL_COMPLEXITY       = 0             # 0 = fast landmark model, 1 = more accurate / slower
     MAX_NUM_HANDS          = 2
     DETECTION_CONFIDENCE   = 0.75
     TRACKING_CONFIDENCE    = 0.75

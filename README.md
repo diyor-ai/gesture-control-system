@@ -12,6 +12,7 @@
 - [System Architecture](#-system-architecture)
 - [Gesture Reference](#-gesture-reference)
 - [Installation](#-installation)
+- [Wayland setup](#-wayland-setup-linux)
 - [Usage](#-usage)
 - [Project Structure](#-project-structure)
 - [Configuration](#️-configuration)
@@ -25,14 +26,14 @@
 
 ## 🔍 Overview
 
-This project delivers a **real-time, gesture-driven computer interaction system** that uses a standard webcam to replace traditional mouse and keyboard input. It processes hand landmarks at ≥ 30 FPS using Google's MediaPipe framework and dispatches recognised gestures to dedicated modules for cursor control, volume, scrolling, drawing, screenshots, window management, zoom, media playback, and screen brightness.
+This project delivers a **real-time, gesture-driven computer interaction system** that uses a standard webcam to replace traditional mouse and keyboard input. It tracks hand landmarks in real time (≈ 30 FPS, limited by the webcam – see [Performance](#-performance)) using Google's MediaPipe framework and dispatches recognised gestures to dedicated modules for cursor control, volume, scrolling, drawing, screenshots, window management, zoom, media playback, and screen brightness.
 
 | Metric | Value |
 |--------|-------|
-| Target FPS | ≥ 30 |
+| Measured FPS | ≈ 30 (camera-limited), see Performance |
 | Detected hands | Up to 2 simultaneous |
 | Total gestures | 14 distinct actions |
-| Lines of code | ~1 200 (documented) |
+| Lines of code | ~2 000 (+ ~1 100 lines of tests) |
 | Supported OS | Windows · macOS · Linux |
 
 ---
@@ -170,14 +171,47 @@ sudo dnf install wireplumber brightnessctl     # wpctl (volume) and brightness
 Volume: `wpctl` → `pactl` → `amixer`. Brightness: `brightnessctl` → `xrandr` (software gamma, X11 only).
 Screen size is auto-detected; override with `GESTURE_SCREEN=2560x1440 python main.py`.
 
-> **Wayland:** PyAutoGUI cannot inject pointer or keyboard events into native Wayland sessions
-> (GNOME 50 on Fedora 44 has no Xorg session). Cursor movement and screenshots are therefore not
-> supported there yet – see the Troubleshooting section.
+> **Wayland (GNOME on Fedora 44 has no Xorg session):** PyAutoGUI cannot move the pointer there, so the app
+> injects input through the kernel's uinput instead – see [Wayland setup](#-wayland-setup-linux) below.
 
 **Windows (brightness):**
 ```bash
 pip install screen-brightness-control
 ```
+
+---
+
+## 🐧 Wayland setup (Linux)
+
+On Wayland the app creates a virtual *absolute* pointing device through `/dev/uinput` (python-evdev) and maps
+the hand position to the detected screen size. That needs read/write access to `/dev/uinput`.
+**Do not add yourself to the `input` group** – that would let every program you run read your keyboard.
+Use a dedicated `uinput` group that only owns `/dev/uinput`. Run these once yourself:
+
+```bash
+sudo groupadd --system uinput
+sudo usermod -aG uinput "$USER"
+sudo cp linux/99-gesture-uinput.rules /etc/udev/rules.d/
+sudo cp linux/uinput.conf /etc/modules-load.d/gesture-uinput.conf
+sudo udevadm control --reload-rules
+sudo udevadm trigger --name-match=uinput
+sudo modprobe uinput
+sudo dnf install gnome-screenshot brightnessctl     # screenshots + brightness
+```
+
+Then **log out and back in** (group membership is read at login) and check:
+
+```bash
+id -nG | tr ' ' '\n' | grep -x uinput      # prints "uinput"
+ls -l /dev/uinput                            # crw-rw---- root uinput
+python tools/uinput_selftest.py              # asks first, then moves the pointer in a square (no clicks)
+```
+
+Trade-off: any process running as a member of `uinput` can inject mouse/keyboard events (it can *not* read
+them). Remove the setup with `sudo gpasswd -d "$USER" uinput` and `sudo rm /etc/udev/rules.d/99-gesture-uinput.rules`.
+
+Backend choice: `INPUT_BACKEND` in `config.py` or `GESTURE_INPUT=uinput|pyautogui|auto`. `auto` uses uinput on
+Wayland and falls back to PyAutoGUI (with a warning) if `/dev/uinput` is not accessible.
 
 ---
 
@@ -216,7 +250,9 @@ gesture_control/
 ├── main.py                  # Entry point – camera loop & module orchestration
 ├── requirements.txt         # Python dependencies
 ├── requirements-dev.txt     # + pytest
-├── tests/                   # Unit tests (synthetic landmarks)
+├── tests/                   # Unit tests (synthetic landmarks, fake input device)
+├── tools/                   # benchmark_fps.py, uinput_selftest.py (manual)
+├── linux/                   # udev rule + modules-load file for the uinput group
 ├── screenshots/             # Auto-created; screenshot captures saved here
 └── modules/
     ├── __init__.py
@@ -231,6 +267,7 @@ gesture_control/
     ├── drawing_canvas.py    # Virtual finger-drawing overlay
     ├── screenshot.py        # Full-screen capture with debounce
     ├── window_mover.py      # Active window drag (Windows & macOS only)
+    ├── input_backend.py     # uinput (Wayland) / PyAutoGUI input injection
     ├── linux_backends.py    # wpctl/pactl volume, brightnessctl/xrandr brightness, screen size
     ├── zoom_control.py      # Ctrl+Scroll pinch zoom
     ├── media_control.py     # Play/Pause / Next / Prev media keys
@@ -261,14 +298,18 @@ Adjust these to match your environment (lighting, hand size, camera distance).
 
 ## 📊 Performance
 
-| Condition | Typical FPS | Accuracy |
-|-----------|-------------|----------|
-| Good lighting, close hand | 28–32 | > 95 % |
-| Low light | 20–28 | ~85 % |
-| Fast movement | 25–30 | ~88 % |
-| Two-hand tracking | 22–28 | ~90 % |
+Measured with `tools/benchmark_fps.py` (real webcam + MediaPipe, no window, no input injection),
+Fedora 44, CPU only, a hand in view. The webcam delivers 640×480 at 30 FPS and ignores a 1280×720 request,
+so 30 FPS is the ceiling.
 
-Tested on: Intel Core i7-11th Gen, 16 GB RAM, integrated camera (720 p).
+| Setting | Camera → tracking FPS (hand in view) |
+|---------|--------------------------------------|
+| Before: 1280×720 requested, `model_complexity=1` | 16.5 – 21.6 |
+| Now: 640×480, `model_complexity=0` (`MODEL_COMPLEXITY`) | 29.9 (camera-limited) |
+| Camera alone | 30.1 |
+
+Numbers vary by about ±3 FPS between runs. The full application (window, HUD, input injection) has not been
+benchmarked yet. Gesture accuracy has not been measured, so no accuracy figures are claimed.
 
 ---
 
@@ -278,13 +319,13 @@ Tested on: Intel Core i7-11th Gen, 16 GB RAM, integrated camera (720 p).
 → Change `CAMERA_INDEX` in `config.py` (try `1`, `2`, etc.)
 
 **Low FPS**  
-→ Reduce `FRAME_WIDTH`/`FRAME_HEIGHT` to `640×480` in `config.py`
+→ Already 640×480 / `MODEL_COMPLEXITY = 0` by default; run `python tools/benchmark_fps.py` to see where time goes
 
 **Volume not changing (Linux)**  
 → Ensure `pulseaudio` or `pipewire-pulse` is running; amixer uses PULSE
 
 **Cursor / screenshot do nothing on Fedora (Wayland)**  
-→ Tested on Fedora 44 / GNOME 50: `pyautogui.moveTo()` silently does nothing, `screenshot()` raises (needs `gnome-screenshot`, and GNOME blocks it). Clicks and scrolls only reach XWayland windows. A Wayland input backend (uinput / portal) is planned.
+→ PyAutoGUI cannot drive native Wayland (measured on Fedora 44 / GNOME 50: `moveTo()` does nothing, `screenshot()` raises). Do the [Wayland setup](#-wayland-setup-linux); the app prints `Input backend: uinput` at start-up when it works.
 
 **Window drag not working**  
 → Install `pywin32` (Windows) or ensure Accessibility permissions are granted (macOS)
