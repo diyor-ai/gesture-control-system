@@ -8,9 +8,11 @@ Course  : Final Assessment Project
 Entry point – initialises all modules and runs the main event loop.
 """
 
+import argparse
 import cv2
 import time
 import sys
+from typing import List, Optional
 from modules.camera import CameraError, read_frame
 from modules.hand_tracker import HandTracker
 from modules.cursor_controller import CursorController
@@ -27,7 +29,16 @@ from modules.ui_overlay import UIOverlay
 from modules.config import Config
 
 
-def main() -> None:
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Advanced Gesture Control System")
+    parser.add_argument(
+        "--debug", action="store_true",
+        help="show finger states, raw/stable pose, detected gesture and FPS on screen",
+    )
+    return parser.parse_args(argv)
+
+
+def main(debug: bool = False) -> None:
     """
     Main application loop.
     Captures webcam frames, processes hand landmarks,
@@ -177,6 +188,8 @@ def main() -> None:
 
         # ── HUD overlay (FPS, active mode, instructions) ──────────────────────
         overlay.draw_hud(frame, avg_fps, engine.active_mode)
+        if debug:
+            overlay.draw_debug(frame, engine.debug, fps, avg_fps)
 
         cv2.imshow("Gesture Control System", frame)
 
@@ -198,4 +211,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(debug=parse_args().debug)

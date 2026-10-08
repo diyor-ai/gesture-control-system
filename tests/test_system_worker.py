@@ -1,9 +1,7 @@
 """Volume / brightness: step filtering and a non-blocking main loop."""
 
-import sys
 import threading
 import time
-from unittest.mock import MagicMock
 
 import numpy as np
 
@@ -70,7 +68,6 @@ def test_worker_survives_a_failing_setter():
 
 
 def _volume_controller(monkeypatch):
-    monkeypatch.setitem(sys.modules, "cv2", MagicMock())
     monkeypatch.setattr("platform.system", lambda: "Linux")
     from modules.volume_control import VolumeController
 
@@ -83,7 +80,7 @@ def _landmarks(distance):
     return lm
 
 
-def test_volume_controller_ignores_jitter(monkeypatch):
+def test_volume_controller_ignores_jitter(monkeypatch, gui_stubs):
     ctrl = _volume_controller(monkeypatch)
     calls = []
     ctrl._worker.close()
@@ -97,7 +94,7 @@ def test_volume_controller_ignores_jitter(monkeypatch):
     assert len(calls) == 1
 
 
-def test_volume_controller_does_not_block_on_a_slow_mixer(monkeypatch):
+def test_volume_controller_does_not_block_on_a_slow_mixer(monkeypatch, gui_stubs):
     ctrl = _volume_controller(monkeypatch)
     applied = []
 

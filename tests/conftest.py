@@ -5,7 +5,10 @@ No camera, OpenCV or MediaPipe is needed – the tests feed 21 hand-made
 (x, y, z) landmark tuples straight into the gesture engine.
 """
 
+import sys
+from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -127,3 +130,28 @@ def stable_engine(clock):
 def engine_any(request, clock):
     """Engine run both without and with the stability layer."""
     return _make_engine(clock, STABILITY_FRAMES=request.param)
+
+
+_GUI_MODULES = (
+    "main",
+    "modules.ui_overlay", "modules.volume_control", "modules.brightness_control",
+    "modules.scroll_control", "modules.zoom_control", "modules.cursor_controller",
+    "modules.window_mover", "modules.media_control", "modules.screenshot",
+    "modules.drawing_canvas",
+)
+
+
+@pytest.fixture
+def gui_stubs(monkeypatch):
+    """
+    Replace OpenCV and PyAutoGUI by mocks and import the controller modules
+    fresh against them, so no test needs a camera, display or input device.
+    """
+    stubs = SimpleNamespace(cv2=MagicMock(), pyautogui=MagicMock())
+    monkeypatch.setitem(sys.modules, "cv2", stubs.cv2)
+    monkeypatch.setitem(sys.modules, "pyautogui", stubs.pyautogui)
+    for name in _GUI_MODULES:
+        sys.modules.pop(name, None)
+    yield stubs
+    for name in _GUI_MODULES:
+        sys.modules.pop(name, None)

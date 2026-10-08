@@ -100,3 +100,39 @@ class UIOverlay:
 
         cv2.putText(frame, label, (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2)
+
+    def draw_debug(
+        self,
+        frame: np.ndarray,
+        debug: dict,
+        fps: float,
+        avg_fps: float,
+    ) -> None:
+        """
+        --debug overlay: per-hand finger states, raw / stable pose and the
+        gesture being dispatched, plus instantaneous and average FPS.
+        """
+        h, w = frame.shape[:2]
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        frame_ms = 1000.0 / max(fps, 1e-6)
+        cv2.putText(frame, f"[debug] fps {fps:5.1f}  avg {avg_fps:5.1f}  frame {frame_ms:5.1f} ms",
+                    (12, h - 90), font, 0.50, (0, 255, 255), 1)
+
+        for hand_label, info in debug.items():
+            x = 20 if hand_label == "Right" else w - 360
+            y = 130
+            role = "primary" if info["primary"] else "secondary"
+            cv2.putText(frame, f"{hand_label} hand ({role})", (x, y),
+                        font, 0.55, (0, 255, 255), 1)
+
+            # One letter per finger: bright when extended, dim when curled
+            for i, (name, up) in enumerate(zip("TIMRP", info["fingers"])):
+                colour = (0, 255, 100) if up else (110, 110, 110)
+                cv2.putText(frame, f"{name}:{int(up)}", (x + i * 52, y + 26),
+                            font, 0.55, colour, 2)
+
+            cv2.putText(frame, f"raw:    {info['raw']}", (x, y + 52), font, 0.50, (220, 220, 220), 1)
+            cv2.putText(frame, f"stable: {info['stable']}", (x, y + 74), font, 0.50, (220, 220, 220), 1)
+            cv2.putText(frame, f"gesture: {info['gesture']}", (x, y + 96), font, 0.50,
+                        _GESTURE_COLORS.get(info["gesture"], (255, 255, 255)), 1)

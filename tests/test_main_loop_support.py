@@ -1,10 +1,6 @@
 """Hand-loss grace period and the state resets main.py relies on."""
 
-import sys
-from unittest.mock import MagicMock
-
 import numpy as np
-import pytest
 
 from modules.config import Config
 from modules.gesture_engine import HandLossGrace
@@ -31,17 +27,8 @@ def test_grace_counter_restarts_after_the_hand_returns():
     assert [grace.update(False) for _ in range(4)] == [False, False, False, True]
 
 
-def test_default_grace_is_used_by_config():
+def test_default_grace_period_is_positive():
     assert Config().HAND_LOSS_GRACE_FRAMES > 0
-
-
-@pytest.fixture
-def stubbed_io(monkeypatch):
-    """Stand-ins for the GUI libraries so the controllers import headless."""
-    pag = MagicMock()
-    monkeypatch.setitem(sys.modules, "pyautogui", pag)
-    monkeypatch.setitem(sys.modules, "cv2", MagicMock())
-    return pag
 
 
 def _hand_at(wrist_y=0.5, tip=(0.5, 0.5)):
@@ -52,7 +39,7 @@ def _hand_at(wrist_y=0.5, tip=(0.5, 0.5)):
     return lm
 
 
-def test_scroll_reset_forgets_the_previous_wrist_position(stubbed_io):
+def test_scroll_reset_forgets_the_previous_wrist_position(gui_stubs):
     from modules.scroll_control import ScrollController
 
     ctrl = ScrollController(Config())
@@ -61,10 +48,10 @@ def test_scroll_reset_forgets_the_previous_wrist_position(stubbed_io):
     ctrl.reset()
     ctrl._last_scroll = 0.0
     ctrl.scroll(_hand_at(wrist_y=0.9), frame)             # would be a huge jump without reset
-    stubbed_io.scroll.assert_not_called()
+    gui_stubs.pyautogui.scroll.assert_not_called()
 
 
-def test_zoom_reset_forgets_the_previous_pinch_distance(stubbed_io):
+def test_zoom_reset_forgets_the_previous_pinch_distance(gui_stubs):
     from modules.zoom_control import ZoomController
 
     ctrl = ZoomController(Config())
@@ -72,21 +59,21 @@ def test_zoom_reset_forgets_the_previous_pinch_distance(stubbed_io):
     ctrl.pinch_zoom(_hand_at(tip=(0.5, 0.45)), frame)
     ctrl.reset()
     ctrl.pinch_zoom(_hand_at(tip=(0.5, 0.05)), frame)     # would zoom without reset
-    stubbed_io.scroll.assert_not_called()
+    gui_stubs.pyautogui.scroll.assert_not_called()
 
 
-def test_clicks_do_not_move_the_pointer_and_double_click_adds_one_click(stubbed_io):
+def test_clicks_do_not_move_the_pointer_and_double_click_adds_one_click(gui_stubs):
     from modules.cursor_controller import CursorController
 
     cursor = CursorController(Config())
     hand = _hand_at()
     cursor.click(hand)
     cursor.right_click(hand)
-    stubbed_io.moveTo.assert_not_called()
-    stubbed_io.click.assert_called_once()
-    stubbed_io.rightClick.assert_called_once()
+    gui_stubs.pyautogui.moveTo.assert_not_called()
+    gui_stubs.pyautogui.click.assert_called_once()
+    gui_stubs.pyautogui.rightClick.assert_called_once()
 
-    stubbed_io.click.reset_mock()
+    gui_stubs.pyautogui.click.reset_mock()
     cursor.double_click(hand)
-    stubbed_io.click.assert_called_once()
-    stubbed_io.doubleClick.assert_not_called()
+    gui_stubs.pyautogui.click.assert_called_once()
+    gui_stubs.pyautogui.doubleClick.assert_not_called()
