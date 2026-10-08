@@ -132,21 +132,22 @@ If the hand disappears for up to 5 frames (`HAND_LOSS_GRACE_FRAMES`) nothing is 
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.9 – 3.12 (MediaPipe 0.10.14 has no wheels for 3.13+); 3.11 recommended
 - Conda (recommended)
 - Webcam
 
 ### Step 1 – Create the Conda environment
 
 ```bash
-conda create -n gesture_control python=3.9 -y
-conda activate gesture_control
+conda create -n gesture311 python=3.11 -y
+conda activate gesture311
 ```
 
 ### Step 2 – Install dependencies
 
 ```bash
 pip install -r requirements.txt
+python -c "import mediapipe; print(mediapipe.__version__)"   # expect 0.10.14
 ```
 
 ### Step 3 – Platform-specific extras
@@ -166,7 +167,7 @@ pip install screen-brightness-control
 ## 🚀 Usage
 
 ```bash
-conda activate gesture_control
+conda activate gesture311
 python main.py
 ```
 
