@@ -20,6 +20,10 @@ class ZoomController:
         self._prev_d   = None
         self._DEADZONE = 0.005
 
+    def reset(self) -> None:
+        """Forget the previous pinch distance (call when the gesture ends)."""
+        self._prev_d = None
+
     def pinch_zoom(self, landmarks: list[tuple], frame: np.ndarray) -> None:
         """Detect pinch spread/pinch and simulate Ctrl+scroll."""
         d = HandTracker.distance(landmarks[4], landmarks[8])

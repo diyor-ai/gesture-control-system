@@ -22,6 +22,10 @@ class ScrollController:
         self._last_scroll = 0.0
         self._COOLDOWN    = 0.06   # seconds between scroll events
 
+    def reset(self) -> None:
+        """Forget the previous wrist position (call when the gesture ends)."""
+        self._prev_y = None
+
     def scroll(self, landmarks: list[tuple], frame: np.ndarray) -> None:
         """Scroll based on wrist Y-axis velocity."""
         now = time.time()

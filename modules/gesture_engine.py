@@ -269,3 +269,24 @@ class GestureEngine:
             state.last_media_time = now
             return "MEDIA_NEXT" if delta > 0 else "MEDIA_PREV"
         return None
+
+
+class HandLossGrace:
+    """
+    Tells the main loop when "no hand" has lasted long enough to be real.
+
+    A detector dropout of a frame or two should not reset cursor, scroll or
+    drawing state; `update()` returns True once, after the hand has been
+    missing for more than `grace_frames` consecutive frames.
+    """
+
+    def __init__(self, grace_frames: int) -> None:
+        self._grace  = grace_frames
+        self._missed = 0
+
+    def update(self, hands_visible: bool) -> bool:
+        if hands_visible:
+            self._missed = 0
+            return False
+        self._missed += 1
+        return self._missed == self._grace + 1

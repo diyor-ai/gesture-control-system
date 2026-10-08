@@ -72,19 +72,23 @@ class CursorController:
 
         pyautogui.moveTo(int(self._smooth_x), int(self._smooth_y))
 
+    # Clicks happen where the cursor already is: moving to the fingertip here
+    # would drag the pointer while the thumb closes in on the index finger.
+
     def click(self, landmarks: List[tuple]) -> None:
         """Perform a single left-click at the current cursor position."""
-        self.move(landmarks)
         pyautogui.click()
 
     def double_click(self, landmarks: List[tuple]) -> None:
-        """Perform a double left-click at the current cursor position."""
-        self.move(landmarks)
-        pyautogui.doubleClick()
+        """
+        Complete a double click.  The first pinch of the pair already sent a
+        click, so one more click inside the OS double-click time makes a real
+        double click (pyautogui.doubleClick() here would add a third click).
+        """
+        pyautogui.click()
 
     def right_click(self, landmarks: List[tuple]) -> None:
         """Perform a right-click at the current cursor position."""
-        self.move(landmarks)
         pyautogui.rightClick()
 
     def on_hand_lost(self) -> None:

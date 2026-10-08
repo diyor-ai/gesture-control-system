@@ -1,7 +1,7 @@
 """
 Advanced Gesture-Based Computer Control System
 ================================================
-Author  : [Your Name]
+Author  : Mukhammaddiyor Abdulazimov
 Date    : May 2026
 Course  : Final Assessment Project
 
@@ -14,7 +14,7 @@ import sys
 from modules.camera import CameraError, read_frame
 from modules.hand_tracker import HandTracker
 from modules.cursor_controller import CursorController
-from modules.gesture_engine import GestureEngine
+from modules.gesture_engine import GestureEngine, HandLossGrace
 from modules.volume_control import VolumeController
 from modules.scroll_control import ScrollController
 from modules.drawing_canvas import DrawingCanvas
@@ -59,6 +59,8 @@ def main() -> None:
     brightness = BrightnessController(cfg)
     overlay    = UIOverlay(cfg)
 
+    hand_loss = HandLossGrace(cfg.HAND_LOSS_GRACE_FRAMES)
+
     # ── FPS tracking ─────────────────────────────────────────────────────────
     prev_time = time.time()
     fps_values: list[float] = []
@@ -91,6 +93,8 @@ def main() -> None:
             fps_values.pop(0)
         avg_fps = sum(fps_values) / len(fps_values)
 
+        active: set = set()                              # gestures seen this frame
+
         if hands_data:
             for hand_info in hands_data:
                 landmarks = hand_info["landmarks"]
@@ -98,6 +102,7 @@ def main() -> None:
 
                 # ── Classify current gesture ──────────────────────────────────
                 gesture = engine.classify(landmarks, hand_label, canvas_enabled=canvas._enabled)
+                active.add(gesture)
 
                 # ── Module dispatch ───────────────────────────────────────────
                 if gesture == "MOVE_CURSOR":
@@ -145,9 +150,25 @@ def main() -> None:
                 # ── Draw gesture label on frame ───────────────────────────────
                 overlay.draw_gesture_label(frame, gesture, hand_label)
 
-        else:
-            # Hand loss recovery – reset stateful modules gracefully
+            # A gesture that is no longer active must not leave stale state
+            # behind (previous wrist position, pinch distance, pen position...)
+            if "SCROLL" not in active:
+                scroller.reset()
+            if "ZOOM" not in active:
+                zoomer.reset()
+            if "DRAG_WINDOW" not in active:
+                win_mover.on_hand_lost()
+            if "DRAW" not in active:
+                canvas.on_hand_lost()
+
+        engine.end_frame()
+
+        # Hand-loss recovery: ignore dropouts shorter than the grace period,
+        # then reset every stateful module once.
+        if hand_loss.update(bool(hands_data)):
             cursor.on_hand_lost()
+            scroller.reset()
+            zoomer.reset()
             win_mover.on_hand_lost()
             canvas.on_hand_lost()
 
@@ -171,6 +192,8 @@ def main() -> None:
     # ── Clean up ──────────────────────────────────────────────────────────────
     cap.release()
     cv2.destroyAllWindows()
+    volume.close()
+    brightness.close()
     print("[INFO] Gesture Control System shut down cleanly.")
 
 
