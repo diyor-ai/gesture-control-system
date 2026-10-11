@@ -37,6 +37,7 @@ _LEGEND = [
     "'d'  – Toggle Draw",
     "'r'  – Clear Canvas",
     "'p'  – Privacy blur",
+    "'f'  – Fullscreen",
 ]
 
 
@@ -122,7 +123,7 @@ class UIOverlay:
 
         frame_ms = 1000.0 / max(fps, 1e-6)
         cv2.putText(frame, f"[debug] fps {fps:5.1f}  avg {avg_fps:5.1f}  frame {frame_ms:5.1f} ms",
-                    (12, h - 90), font, 0.50, (0, 255, 255), 1)
+                    (12, h - 12 - len(_LEGEND) * 22 - 6), font, 0.50, (0, 255, 255), 1)   # above the key help
 
         for hand_label, info in debug.items():
             x = 20 if hand_label == "Right" else w - 360

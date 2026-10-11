@@ -33,3 +33,34 @@ def letterbox(frame: np.ndarray, width: int, height: int, color=BACKGROUND) -> n
     x, y = (width - new_w) // 2, (height - new_h) // 2
     canvas[y:y + new_h, x:x + new_w] = resized
     return canvas
+
+
+MIN_WINDOW_PX = 100             # smaller rects are transient (window being created or minimised)
+
+
+class WindowFitter:
+    """
+    Letterbox each frame into the window's real client area.
+
+    The window must use WINDOW_FREERATIO: Qt then stretches whatever image it
+    gets over the whole client area, and `get_rect` (cv2.getWindowImageRect)
+    returns the full window size.  Because the frame we hand over already has
+    the window's aspect ratio, nothing is distorted, and the size we produce
+    never feeds back into the size we measure.  Rects below MIN_WINDOW_PX are
+    ignored and the last good size is kept.
+    """
+
+    def __init__(self, get_rect) -> None:
+        self._get_rect = get_rect
+        self._size = None                   # last good (width, height)
+
+    def fit(self, frame: np.ndarray) -> np.ndarray:
+        try:
+            _, _, w, h = self._get_rect()
+        except Exception:                   # cv2.error before the window exists
+            w = h = 0
+        if w >= MIN_WINDOW_PX and h >= MIN_WINDOW_PX:
+            self._size = (int(w), int(h))
+        if self._size is None:
+            return frame
+        return letterbox(frame, *self._size)

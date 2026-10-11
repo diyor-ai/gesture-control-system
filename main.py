@@ -30,22 +30,11 @@ from modules.media_control import MediaController
 from modules.brightness_control import BrightnessController
 from modules.ui_overlay import UIOverlay
 from modules.config import Config
-from modules.window import letterbox, window_size
+from modules.window import WindowFitter, window_size
 from modules.input_backend import InputBackendError, create_backend
 
 
 WINDOW_NAME = "Gesture Control System"
-
-
-def _fit_to_window(frame):
-    """Letterbox the frame into the current window with a dark background (never white bars)."""
-    try:
-        _, _, win_w, win_h = cv2.getWindowImageRect(WINDOW_NAME)
-    except cv2.error:
-        return frame
-    if win_w <= 0 or win_h <= 0:
-        return frame
-    return letterbox(frame, win_w, win_h)
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -76,9 +65,12 @@ def main(debug: bool = False) -> None:
         sys.exit(1)
 
     # WINDOW_GUI_NORMAL drops OpenCV's Qt toolbar and status bar (camera view + HUD only);
-    # WINDOW_KEEPRATIO stops the image being stretched when the window is resized.
-    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_KEEPRATIO)
+    # WINDOW_FREERATIO makes Qt fill the whole client area, so getWindowImageRect is the real
+    # window size; WindowFitter then letterboxes with dark bars (see modules/window.py).
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_FREERATIO)
+    fitter = WindowFitter(lambda: cv2.getWindowImageRect(WINDOW_NAME))
     window_sized = False
+    fullscreen = False
 
     # ── Input injection (uinput on Wayland, PyAutoGUI elsewhere) ─────────────
     try:
@@ -113,6 +105,7 @@ def main(debug: bool = False) -> None:
     print("[INFO] Press 'd' to toggle drawing canvas.")
     print("[INFO] Press 'r' to clear the drawing canvas.")
     print("[INFO] Press 'p' to toggle privacy mode (blurred camera image).")
+    print("[INFO] Press 'f' to toggle fullscreen.")
 
     try:
         while True:
@@ -231,7 +224,7 @@ def main(debug: bool = False) -> None:
                 # Size the window from the real first frame, not the requested resolution
                 cv2.resizeWindow(WINDOW_NAME, *window_size(frame.shape, cfg.WINDOW_SCALE))
                 window_sized = True
-            frame = _fit_to_window(frame)
+            frame = fitter.fit(frame)
             cv2.imshow(WINDOW_NAME, frame)
 
             # ── Keyboard shortcuts ────────────────────────────────────────────────
@@ -244,6 +237,11 @@ def main(debug: bool = False) -> None:
                 canvas.clear()
             elif key == ord("p"):
                 privacy = not privacy
+            elif key == ord("f"):
+                fullscreen = not fullscreen
+                cv2.setWindowProperty(
+                    WINDOW_NAME, cv2.WND_PROP_FULLSCREEN,
+                    cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL)
     except KeyboardInterrupt:
         print("\n[INFO] Ctrl+C received, shutting down.")
     finally:

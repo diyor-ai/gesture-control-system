@@ -17,7 +17,7 @@ Control your computer with hand gestures: a webcam goes in, mouse, scroll, volum
 - **Privacy mode for demos.** Press `p` to blur the camera image beyond recognition; the hand skeleton and HUD stay sharp on top.
 - **Works on Wayland.** Input is injected through a virtual absolute pointer (`uinput` via python-evdev) with the position mapped to the detected screen size. PyAutoGUI is used on X11, Windows and macOS.
 - **Slow OS calls never block the camera loop.** Volume and brightness changes pass a 3 % step filter, then run on a background worker that keeps only the newest value.
-- **219 pytest tests, no camera needed.** They run in about 1.6 s against synthetic hand landmarks, a fake clock and a fake uinput device.
+- **228 pytest tests, no camera needed.** They run in about 1.6 s against synthetic hand landmarks, a fake clock and a fake uinput device.
 - **Measured performance.** Camera plus tracking runs at 29.9 FPS with a hand in view (camera limit 30.1), up from 16.5–21.6 FPS with the first settings.
 
 ## Quick start
@@ -25,7 +25,7 @@ Control your computer with hand gestures: a webcam goes in, mouse, scroll, volum
 ```bash
 conda create -n gesture311 python=3.11 -y && conda activate gesture311
 pip install -r requirements.txt
-python main.py            # q quit · d toggle drawing · r clear canvas · p privacy blur
+python main.py            # q quit · d toggle drawing · r clear canvas · p privacy blur · f fullscreen
 python main.py --debug    # finger states, raw/stable pose, pinch ratios, FPS
 ```
 
@@ -105,7 +105,7 @@ Runs vary by about ±3 FPS. The full application (window, HUD, input injection) 
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                      # 219 tests in 17 files, about 1.6 s, no camera or display
+pytest                      # 228 tests in 17 files, about 1.6 s, no camera or display
 ```
 
 They cover every gesture pose on both hands, click edge-triggering, stability and hand-loss behaviour, hand-size invariance (0.4× to 1.6×), the uinput event stream, Linux backend fallbacks, camera retries, canvas sizing and the debug overlay. Manual checks: `tools/uinput_selftest.py` (moves the pointer after asking) and `tools/benchmark_fps.py`.
