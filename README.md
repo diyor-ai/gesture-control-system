@@ -1,5 +1,7 @@
 # Gesture Control System
 
+[![CI](https://github.com/diyor-ai/gesture-control-system/actions/workflows/ci.yml/badge.svg)](https://github.com/diyor-ai/gesture-control-system/actions/workflows/ci.yml)
+
 Control your computer with hand gestures: a webcam goes in, mouse, scroll, volume and media control come out. Python, MediaPipe, OpenCV.
 
 <!-- demo.gif goes here -->
@@ -99,7 +101,7 @@ Runs vary by about ±3 FPS. The full application (window, HUD, input injection) 
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                      # 174 tests in 12 files, about 1.6 s, no camera or display
+pytest                      # 189 tests in 13 files, about 1.6 s, no camera or display
 ```
 
 They cover every gesture pose on both hands, click edge-triggering, stability and hand-loss behaviour, hand-size invariance (0.4× to 1.6×), the uinput event stream, Linux backend fallbacks, camera retries, canvas sizing and the debug overlay. Manual checks: `tools/uinput_selftest.py` (moves the pointer after asking) and `tools/benchmark_fps.py`.
@@ -139,8 +141,10 @@ sudo cp linux/uinput.conf /etc/modules-load.d/gesture-uinput.conf
 sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=uinput
 sudo modprobe uinput
-sudo dnf install gnome-screenshot brightnessctl     # screenshots and brightness
+sudo dnf install brightnessctl                     # brightness
 ```
+
+`gnome-screenshot` or `grim` is only a fallback for non-GNOME desktops; on GNOME 50 screenshots go through the uinput shortcut.
 
 Log out and back in, then check:
 
@@ -162,7 +166,8 @@ Members of `uinput` can inject input events but cannot read them. To undo: `sudo
 
 ## Limitations
 
-- Tested only on Fedora 44 with GNOME on Wayland. The Windows (pycaw, win32) and macOS (AppleScript) code paths exist but have never been run.
+- Tested only on Fedora 44 / GNOME 50 Wayland. The Windows (pycaw, win32) and macOS (AppleScript) code paths exist but have never been run.
+- Cursor, clicks, screenshot, swipe and canvas toggle were verified by hand on real hardware (Fedora 44 / GNOME 50).
 - No accuracy measurement yet; the engine is rule-based and thresholds were tuned by hand.
 - Window drag is not available on Linux.
 - The full application loop has not been benchmarked, and the gesture-to-pointer path on real hardware is verified only after the uinput setup above.
