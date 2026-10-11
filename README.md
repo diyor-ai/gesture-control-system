@@ -194,9 +194,8 @@ Members of `uinput` can inject input events but cannot read them. To undo: `sudo
 ## Limitations
 
 - Tested only on Fedora 44 / GNOME 50 Wayland. The Windows (pycaw, win32) and macOS (AppleScript) code paths exist but have never been run.
-- Cursor, clicks, screenshot, swipe and canvas toggle were verified by hand on real hardware (Fedora 44 / GNOME 50).
-- No accuracy measurement yet; the engine is rule-based and thresholds were tuned by hand.
-- Joystick scrolling, click lock + double click, privacy blur and the window fit (normal, tiled, maximized, fullscreen) were verified by hand on Fedora 44 / GNOME 50; there is still no per-gesture accuracy measurement.
+- Verified by hand on Fedora 44 / GNOME 50 Wayland: cursor, click, double click (click lock), right click, joystick scroll, volume, screenshot, media swipe, drawing canvas, privacy blur and window fit (normal, tiled, maximized, fullscreen).
+- No per-gesture accuracy measurement yet: the engine is rule-based and thresholds were tuned by hand.
 - Window drag is not available on Linux.
 - The full application loop has not been benchmarked, and the gesture-to-pointer path on real hardware is verified only after the uinput setup above.
 - One webcam, one user; Left/Right labels come from MediaPipe and can occasionally flip.
