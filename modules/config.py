@@ -62,9 +62,10 @@ class Config:
     FAST_DOUBLE_CLICK_GAP  = 0.05          # seconds between the two clicks sent for a DOUBLE_CLICK
     # Scroll is joystick-style: hold the hand above/below where the gesture started.
     SCROLL_DEADZONE        = 0.15          # palm lengths around the anchor where nothing scrolls
-    SCROLL_SPEED           = 30.0          # notches/s at 1 palm length beyond the dead zone
-    SCROLL_EXPONENT        = 1.3           # >1: fine control near the dead zone, fast further out
-    SCROLL_MAX_SPEED       = 40.0          # notches/s cap
+    SCROLL_FULL_SPEED_OFFSET = 0.8         # palm lengths: at and beyond this offset speed is SCROLL_MAX_SPEED
+    SCROLL_MAX_SPEED       = 15.0          # notches/s at full speed
+    SCROLL_EXPONENT        = 1.5           # >1: gentle near the dead zone (reading speed), steeper further out
+    SCROLL_ANCHOR_GRACE    = 0.6           # seconds the SCROLL pose may drop out before the anchor is forgotten
     SCROLL_NATURAL         = False         # False: hand below anchor = scroll down; True: inverted
     SCROLL_MAX_DT          = 0.1           # seconds; longer frame gaps are clamped (no jump after a stall)
     DRAW_MODE_DISTANCE     = 0.05          # index–middle gap to enter draw mode

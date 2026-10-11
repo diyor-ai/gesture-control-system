@@ -147,5 +147,80 @@ def test_debug_log_is_throttled_and_off_by_default(gui_stubs, capsys):
 
     assert drive(False) == []
     lines = drive(True)
+    lines = [l for l in lines if "offset=" in l]
     assert 8 <= len(lines) <= 11                     # ~5 per second
-    assert all(l.startswith("[scroll]") and "offset=" in l and "speed=" in l and "units=" in l for l in lines)
+    assert all(l.startswith("[scroll]") and "offset=" in l and "speed=" in l and "units_since_last_line=" in l and "anchor_resets=" in l for l in lines)
+
+
+def _absent(ctrl, clock, seconds, fps=30):
+    for _ in range(int(round(seconds * fps))):
+        clock.advance(1 / fps)
+        ctrl.pose_absent()
+
+
+def test_short_pose_dropout_keeps_the_anchor_so_coming_back_does_not_reverse(rig):
+    ctrl, backend, clock, run, cfg, frame, hand = rig
+    run(1.0, 1.0)                                    # far below the anchor, scrolling down
+    backend.units.clear()
+    _absent(ctrl, clock, cfg.SCROLL_ANCHOR_GRACE * 0.5)      # pose lost for a few frames
+    assert backend.units == []                       # nothing is sent while absent
+    run(0.0, 1.0)                                    # hand returns to the neutral position
+    assert all(u < 0 for u in backend.units)         # never scrolls up on the way back
+    assert not any(u > 0 for u in backend.units)
+
+
+def test_resuming_after_a_dropout_has_no_catch_up_burst(rig):
+    ctrl, backend, clock, run, cfg, frame, hand = rig
+    _absent(ctrl, clock, cfg.SCROLL_ANCHOR_GRACE * 0.8)
+    ctrl.scroll(_shift(hand, 1.0 * PALM), frame)
+    assert backend.units == []                       # first frame back only re-syncs the clock
+
+
+def test_pose_absent_longer_than_the_grace_resets_the_anchor(rig):
+    ctrl, backend, clock, run, cfg, frame, hand = rig
+    _absent(ctrl, clock, cfg.SCROLL_ANCHOR_GRACE + 0.2)
+    backend.units.clear()
+    far = _shift(hand, 1.0 * PALM)
+    clock.advance(0.1)
+    ctrl.scroll(far, frame)                          # new anchor right here
+    run(0.0, 1.0, h=far)
+    assert backend.units == []
+
+
+def test_speed_is_capped_at_every_offset_beyond_the_full_speed_point(gui_stubs):
+    from modules.scroll_control import ScrollController
+
+    cfg = Config()
+    ctrl = ScrollController(cfg, WheelBackend(), clock=FakeClock())
+    for offset in (cfg.SCROLL_FULL_SPEED_OFFSET, 1.0, 1.5, 3.0, 10.0, -2.0):
+        assert ctrl.speed(offset) == pytest.approx(cfg.SCROLL_MAX_SPEED)
+    assert ctrl.speed(cfg.SCROLL_FULL_SPEED_OFFSET - 0.1) < cfg.SCROLL_MAX_SPEED
+    assert ctrl.speed(cfg.SCROLL_DEADZONE) == 0
+
+
+def test_reading_speed_scroll_is_gentle_near_the_dead_zone(gui_stubs):
+    from modules.scroll_control import ScrollController
+
+    cfg = Config()
+    ctrl = ScrollController(cfg, WheelBackend(), clock=FakeClock())
+    assert 0 < ctrl.speed(cfg.SCROLL_DEADZONE + 0.1) < 3        # a few notches per second at most
+
+
+def test_debug_log_reports_anchor_set_reset_and_resets_between_lines(gui_stubs, capsys):
+    from modules.scroll_control import ScrollController
+
+    clock = FakeClock()
+    ctrl = ScrollController(Config(), WheelBackend(), clock=clock, debug=True)
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    hand = make_hand("IM")
+    ctrl.scroll(hand, frame)
+    for _ in range(10):
+        clock.advance(1 / 30)
+        ctrl.scroll(_shift(hand, 0.7 * PALM), frame)
+    _absent(ctrl, clock, Config().SCROLL_ANCHOR_GRACE + 0.1)
+    ctrl.scroll(hand, frame)
+    clock.advance(0.3)
+    ctrl.scroll(hand, frame)
+    out = capsys.readouterr().out
+    assert "[scroll] anchor set" in out and "[scroll] anchor reset" in out
+    assert "anchor_resets=1" in out

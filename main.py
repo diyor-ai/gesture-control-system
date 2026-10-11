@@ -184,8 +184,6 @@ def main(debug: bool = False) -> None:
 
                 # A gesture that is no longer active must not leave stale state
                 # behind (previous wrist position, pinch distance, pen position...)
-                if "SCROLL" not in active:
-                    scroller.reset()
                 if "ZOOM" not in active:
                     zoomer.reset()
                 if "DRAG_WINDOW" not in active:
@@ -193,13 +191,16 @@ def main(debug: bool = False) -> None:
                 if "DRAW" not in active:
                     canvas.on_hand_lost()
 
+            # The scroll anchor survives short pose dropouts (also frames with no hand).
+            if "SCROLL" not in active:
+                scroller.pose_absent()
+
             engine.end_frame()
 
             # Hand-loss recovery: ignore dropouts shorter than the grace period,
             # then reset every stateful module once.
             if hand_loss.update(bool(hands_data)):
                 cursor.on_hand_lost()
-                scroller.reset()
                 zoomer.reset()
                 win_mover.on_hand_lost()
                 canvas.on_hand_lost()
