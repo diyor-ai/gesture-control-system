@@ -2,9 +2,12 @@
 
 [![CI](https://github.com/diyor-ai/gesture-control-system/actions/workflows/ci.yml/badge.svg)](https://github.com/diyor-ai/gesture-control-system/actions/workflows/ci.yml)
 
-Control your computer with hand gestures: a webcam goes in, mouse, scroll, volume and media control come out. Python, MediaPipe, OpenCV.
+<p align="center">
+  <img src="docs/media/demo.gif" width="800" alt="Gesture Control demo: cursor, double click, scroll, volume, screenshot">
+</p>
+<p align="center"><em>Real run on Fedora 44 / GNOME 50 Wayland, CPU only, ~30 FPS: double click to open folders, scroll down and up, volume, screenshot.</em></p>
 
-<!-- demo.gif goes here -->
+Control your computer with hand gestures: a webcam goes in, mouse, scroll, volume and media control come out. Python, MediaPipe, OpenCV.
 
 ## Highlights
 
