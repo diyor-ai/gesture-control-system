@@ -52,6 +52,21 @@ Python 3.11 is what I develop on; MediaPipe 0.10.14 supports 3.9–3.12. On Linu
 
 Fist drags the active window on Windows and macOS only; it is disabled on Linux (`WINDOW_DRAG_ENABLED`).
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/media/debug.png" width="260" alt="Debug overlay"></td>
+    <td align="center"><img src="docs/media/privacy.png" width="260" alt="Privacy blur"></td>
+    <td align="center"><img src="docs/media/canvas.png" width="260" alt="Drawing canvas"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><code>--debug</code>: FPS, frame time, finger states, raw → stable → gesture</sub></td>
+    <td align="center"><sub><code>p</code>: privacy blur — face unrecognisable, hand skeleton stays sharp</sub></td>
+    <td align="center"><sub><code>d</code>: draw in the air on the camera overlay</sub></td>
+  </tr>
+</table>
+
 ## Architecture
 
 ```
