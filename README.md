@@ -56,14 +56,14 @@ Fist drags the active window on Windows and macOS only; it is disabled on Linux 
 
 <table>
   <tr>
-    <td align="center"><img src="docs/media/debug.png" width="260" alt="Debug overlay"></td>
-    <td align="center"><img src="docs/media/privacy.png" width="260" alt="Privacy blur"></td>
-    <td align="center"><img src="docs/media/canvas.png" width="260" alt="Drawing canvas"></td>
+    <td align="center"><img src="docs/media/debug.jpg" width="280" alt="Debug overlay"></td>
+    <td align="center"><img src="docs/media/privacy.jpg" width="280" alt="Privacy blur"></td>
+    <td align="center"><img src="docs/media/canvas.jpg" width="280" alt="Drawing canvas"></td>
   </tr>
   <tr>
     <td align="center"><sub><code>--debug</code>: FPS, frame time, finger states, raw → stable → gesture</sub></td>
     <td align="center"><sub><code>p</code>: privacy blur — face unrecognisable, hand skeleton stays sharp</sub></td>
-    <td align="center"><sub><code>d</code>: draw in the air on the camera overlay</sub></td>
+    <td align="center"><sub><code>d</code>: draw in the air (here with privacy on)</sub></td>
   </tr>
 </table>
 
@@ -196,7 +196,7 @@ Members of `uinput` can inject input events but cannot read them. To undo: `sudo
 - Tested only on Fedora 44 / GNOME 50 Wayland. The Windows (pycaw, win32) and macOS (AppleScript) code paths exist but have never been run.
 - Cursor, clicks, screenshot, swipe and canvas toggle were verified by hand on real hardware (Fedora 44 / GNOME 50).
 - No accuracy measurement yet; the engine is rule-based and thresholds were tuned by hand.
-- Joystick scrolling, the click lock, fast double click and privacy blur are covered by tests but not yet verified by hand on hardware.
+- Joystick scrolling, click lock + double click, privacy blur and the window fit (normal, tiled, maximized, fullscreen) were verified by hand on Fedora 44 / GNOME 50; there is still no per-gesture accuracy measurement.
 - Window drag is not available on Linux.
 - The full application loop has not been benchmarked, and the gesture-to-pointer path on real hardware is verified only after the uinput setup above.
 - One webcam, one user; Left/Right labels come from MediaPipe and can occasionally flip.
