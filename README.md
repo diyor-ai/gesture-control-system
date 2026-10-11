@@ -8,7 +8,7 @@ Control your computer with hand gestures: a webcam goes in, mouse, scroll, volum
 
 ## Highlights
 
-- **Edge-triggered clicks.** A pinch fires one click when it starts and must be released before the next. A double click is two separate pinches within 0.60 s, sent to the OS as two clicks 50 ms apart at a locked cursor position.
+- **Edge-triggered clicks.** A pinch fires one click when it starts and must be released before the next. A double click is two separate pinches within 0.85 s, sent to the OS as two clicks 50 ms apart at a locked cursor position.
 - **Per-hand stability layer.** A pose must be seen on 3 consecutive frames (about 100 ms at 30 FPS) before it activates, so detector flicker cannot fire or re-arm gestures. Each hand keeps its own state, and a 5-frame grace period rides out tracking dropouts.
 - **Distances in palm lengths.** Pinch, volume, brightness, zoom, scroll and swipe thresholds are divided by the wrist-to-middle-finger-base length, so they behave the same near and far from the camera.
 - **Privacy mode for demos.** Press `p` to blur the camera image beyond recognition; the hand skeleton and HUD stay sharp on top.
@@ -36,7 +36,7 @@ Python 3.11 is what I develop on; MediaPipe 0.10.14 supports 3.9–3.12. On Linu
 |---------|------|------|-----------|
 | Move cursor | primary | Index up, M R P down, thumb free | Fingertip mapped to the screen, smoothed |
 | Click | primary | Same pose, thumb tip pinched onto index tip | One click per pinch |
-| Double click | primary | Two pinches within 0.60 s | Second pinch sends a fast click pair at the locked position |
+| Double click | primary | Two pinches within 0.85 s | Second pinch sends a fast click pair at the locked position |
 | Right click | primary | Only middle up, thumb pinched onto middle tip | One click per pinch |
 | Draw | primary | Index pose while the canvas is on (`d`) | Draws on the camera overlay |
 | Zoom | other | Thumb + index up, M R P down (L shape) | Thumb–index spread sends Ctrl + scroll |
@@ -84,7 +84,7 @@ The engine is a classifier with state, not a stateless function: it keeps timers
 | Swipe direction was inverted (the frame is already mirrored) | Fixed and covered by a test |
 | Drawing crashed because the camera ignored the 1280×720 request | The canvas is sized from the first real frame |
 | Pointer injection silently did nothing on Wayland | Virtual absolute pointer through uinput |
-| A double click would have sent three clicks | Second pinch sends a fast pair (50 ms apart) at a cursor locked for 0.7 s after each click |
+| A double click would have sent three clicks | Second pinch sends a fast pair (50 ms apart) at a cursor locked for 0.85 s after each click |
 
 ## Performance
 
@@ -117,8 +117,8 @@ Everything is in `modules/config.py`. Distances are in palm lengths.
 | `STABILITY_FRAMES` | 3 | Frames a pose must persist to activate |
 | `HAND_LOSS_GRACE_FRAMES` | 5 | Dropout frames tolerated before state resets |
 | `CLICK_THRESHOLD` | 0.20 | Maximum thumb-to-fingertip distance for a pinch |
-| `DOUBLE_CLICK_INTERVAL` | 0.60 s | Maximum time between two pinch starts |
-| `CLICK_LOCK_TIME` | 0.70 s | Cursor frozen after a click so both pinches hit one pixel |
+| `DOUBLE_CLICK_INTERVAL` | 0.85 s | Maximum time between two pinch starts |
+| `CLICK_LOCK_TIME` | 0.85 s | Cursor frozen after a click so both pinches hit one pixel |
 | `PRIVACY_START` | `False` | Start with the camera image blurred (`p` toggles) |
 | `SCREENSHOT_HOLD_TIME` / `PLAY_PAUSE_HOLD_TIME` | 1.0 s / 0.5 s | Hold time before firing |
 | `SCREENSHOT_COOLDOWN` | 5.0 s | Minimum time between screenshots |
