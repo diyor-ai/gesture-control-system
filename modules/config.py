@@ -60,6 +60,13 @@ class Config:
     CLICK_LOCK_TIME        = 0.85          # cursor frozen this long after a click so both pinches hit one pixel
                                            # (keep >= DOUBLE_CLICK_INTERVAL)
     FAST_DOUBLE_CLICK_GAP  = 0.05          # seconds between the two clicks sent for a DOUBLE_CLICK
+    # Scroll is joystick-style: hold the hand above/below where the gesture started.
+    SCROLL_DEADZONE        = 0.15          # palm lengths around the anchor where nothing scrolls
+    SCROLL_SPEED           = 30.0          # notches/s at 1 palm length beyond the dead zone
+    SCROLL_EXPONENT        = 1.3           # >1: fine control near the dead zone, fast further out
+    SCROLL_MAX_SPEED       = 40.0          # notches/s cap
+    SCROLL_NATURAL         = False         # False: hand below anchor = scroll down; True: inverted
+    SCROLL_MAX_DT          = 0.1           # seconds; longer frame gaps are clamped (no jump after a stall)
     DRAW_MODE_DISTANCE     = 0.05          # index–middle gap to enter draw mode
     SCREENSHOT_HOLD_TIME   = 1.0           # seconds gesture must be held
     PLAY_PAUSE_HOLD_TIME   = 0.5           # seconds the 3-finger pose must be held

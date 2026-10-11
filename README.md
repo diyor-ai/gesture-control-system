@@ -14,7 +14,7 @@ Control your computer with hand gestures: a webcam goes in, mouse, scroll, volum
 - **Privacy mode for demos.** Press `p` to blur the camera image beyond recognition; the hand skeleton and HUD stay sharp on top.
 - **Works on Wayland.** Input is injected through a virtual absolute pointer (`uinput` via python-evdev) with the position mapped to the detected screen size. PyAutoGUI is used on X11, Windows and macOS.
 - **Slow OS calls never block the camera loop.** Volume and brightness changes pass a 3 % step filter, then run on a background worker that keeps only the newest value.
-- **198 pytest tests, no camera needed.** They run in about 1.6 s against synthetic hand landmarks, a fake clock and a fake uinput device.
+- **208 pytest tests, no camera needed.** They run in about 1.6 s against synthetic hand landmarks, a fake clock and a fake uinput device.
 - **Measured performance.** Camera plus tracking runs at 29.9 FPS with a hand in view (camera limit 30.1), up from 16.5–21.6 FPS with the first settings.
 
 ## Quick start
@@ -40,7 +40,7 @@ Python 3.11 is what I develop on; MediaPipe 0.10.14 supports 3.9–3.12. On Linu
 | Right click | primary | Only middle up, thumb pinched onto middle tip | One click per pinch |
 | Draw | primary | Index pose while the canvas is on (`d`) | Draws on the camera overlay |
 | Zoom | other | Thumb + index up, M R P down (L shape) | Thumb–index spread sends Ctrl + scroll |
-| Scroll | either | Index + middle up, R P down | Wrist up/down movement |
+| Scroll | either | Index + middle up, R P down | Hold the hand above/below where the gesture started |
 | Volume | either | Thumb + pinky up, I M R down | Thumb–pinky spread = 0–100 % |
 | Brightness | either | Thumb + ring up, I M P down | Thumb–ring spread = min–max |
 | Play / pause | either | Index + middle + ring up, pinky down | Hold 0.5 s, fires once |
@@ -102,7 +102,7 @@ Runs vary by about ±3 FPS. The full application (window, HUD, input injection) 
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                      # 198 tests in 15 files, about 1.6 s, no camera or display
+pytest                      # 208 tests in 16 files, about 1.6 s, no camera or display
 ```
 
 They cover every gesture pose on both hands, click edge-triggering, stability and hand-loss behaviour, hand-size invariance (0.4× to 1.6×), the uinput event stream, Linux backend fallbacks, camera retries, canvas sizing and the debug overlay. Manual checks: `tools/uinput_selftest.py` (moves the pointer after asking) and `tools/benchmark_fps.py`.
@@ -120,6 +120,9 @@ Everything is in `modules/config.py`. Distances are in palm lengths.
 | `DOUBLE_CLICK_INTERVAL` | 0.85 s | Maximum time between two pinch starts |
 | `CLICK_LOCK_TIME` | 0.85 s | Cursor frozen after a click so both pinches hit one pixel |
 | `PRIVACY_START` | `False` | Start with the camera image blurred (`p` toggles) |
+| `SCROLL_DEADZONE` | 0.15 | Palm lengths around the start position where nothing scrolls |
+| `SCROLL_SPEED` / `SCROLL_EXPONENT` / `SCROLL_MAX_SPEED` | 30 / 1.3 / 40 | Notches per second grows with the offset beyond the dead zone, capped |
+| `SCROLL_NATURAL` | `False` | `False`: hand below the start = scroll down; `True`: inverted |
 | `SCREENSHOT_HOLD_TIME` / `PLAY_PAUSE_HOLD_TIME` | 1.0 s / 0.5 s | Hold time before firing |
 | `SCREENSHOT_COOLDOWN` | 5.0 s | Minimum time between screenshots |
 | `SCREENSHOT_KEYS` | `("shift", "print")` | GNOME/Wayland: shortcut typed through uinput (`gsettings get org.gnome.shell.keybindings screenshot`) |
@@ -172,7 +175,7 @@ Members of `uinput` can inject input events but cannot read them. To undo: `sudo
 - Tested only on Fedora 44 / GNOME 50 Wayland. The Windows (pycaw, win32) and macOS (AppleScript) code paths exist but have never been run.
 - Cursor, clicks, screenshot, swipe and canvas toggle were verified by hand on real hardware (Fedora 44 / GNOME 50).
 - No accuracy measurement yet; the engine is rule-based and thresholds were tuned by hand.
-- The click lock, fast double click and privacy blur are covered by tests but not yet verified by hand on hardware.
+- Joystick scrolling, the click lock, fast double click and privacy blur are covered by tests but not yet verified by hand on hardware.
 - Window drag is not available on Linux.
 - The full application loop has not been benchmarked, and the gesture-to-pointer path on real hardware is verified only after the uinput setup above.
 - One webcam, one user; Left/Right labels come from MediaPipe and can occasionally flip.

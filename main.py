@@ -79,7 +79,7 @@ def main(debug: bool = False) -> None:
     cursor     = CursorController(cfg, backend, debug=debug)
     engine     = GestureEngine(cfg)
     volume     = VolumeController(cfg)
-    scroller   = ScrollController(cfg, backend)
+    scroller   = ScrollController(cfg, backend, debug=debug)
     canvas     = DrawingCanvas(cfg)
     screenshot = ScreenshotModule(cfg, backend)
     win_mover  = WindowMover(cfg)

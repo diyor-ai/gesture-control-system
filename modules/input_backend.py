@@ -62,6 +62,7 @@ class PyAutoGUIBackend:
         pyautogui.PAUSE    = 0
         pyautogui.FAILSAFE = False
         self._pag = pyautogui
+        self._wheel_acc = 0.0           # fractional notches not yet sent
 
     def move_to(self, x: int, y: int) -> None:
         self._pag.moveTo(int(x), int(y))
@@ -74,6 +75,14 @@ class PyAutoGUIBackend:
 
     def scroll(self, clicks: int) -> None:
         self._pag.scroll(clicks)
+
+    def scroll_hi_res(self, units: int) -> None:
+        """Scroll by wheel units (120 = one notch); whole notches go out, the rest accumulates."""
+        self._wheel_acc += units / _HI_RES_PER_NOTCH
+        whole = int(self._wheel_acc)
+        if whole:
+            self._wheel_acc -= whole
+            self._pag.scroll(whole)
 
     def ctrl_scroll(self, clicks: int) -> None:
         self._pag.keyDown("ctrl")
@@ -115,6 +124,7 @@ class UInputBackend:
             raise InputBackendError(
                 f"Unknown key(s) in SCREENSHOT_KEYS: {unknown} (use {sorted(_KEY_NAMES)})")
         self.screenshot_location = None
+        self._wheel_acc = 0             # hi-res units since the last full notch
         self._screenshot_dir = screenshot_dir
         self._dev = device if device is not None else _open_uinput_device(self._w, self._h)
 
@@ -142,6 +152,23 @@ class UInputBackend:
             return
         self._dev.write(EV_REL, REL_WHEEL_HI_RES, int(clicks) * _HI_RES_PER_NOTCH)
         self._dev.write(EV_REL, REL_WHEEL, int(clicks))
+        self._dev.syn()
+
+    def scroll_hi_res(self, units: int) -> None:
+        """
+        Smooth scrolling: REL_WHEEL_HI_RES units go out every call (120 = one
+        notch); REL_WHEEL only when the accumulated units complete a notch, so
+        older apps still scroll and nothing is lost to rounding.
+        """
+        units = int(units)
+        if units == 0:
+            return
+        self._dev.write(EV_REL, REL_WHEEL_HI_RES, units)
+        self._wheel_acc += units
+        notches = int(self._wheel_acc / _HI_RES_PER_NOTCH)      # toward zero
+        if notches:
+            self._wheel_acc -= notches * _HI_RES_PER_NOTCH
+            self._dev.write(EV_REL, REL_WHEEL, notches)
         self._dev.syn()
 
     def ctrl_scroll(self, clicks: int) -> None:

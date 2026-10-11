@@ -192,3 +192,42 @@ def test_empty_screenshot_keys_disable_the_shortcut(monkeypatch, dev, tmp_path):
     monkeypatch.setattr("modules.linux_backends.take_screenshot", lambda p: False)
     b = ib.UInputBackend(1920, 1080, device=dev)
     assert b.screenshot(str(tmp_path / "x.png")) is False and dev.events == []
+
+
+# ── hi-res scrolling ──────────────────────────────────────────────────────────
+
+def test_hi_res_scroll_sends_units_every_call_and_a_notch_only_when_complete(backend, dev):
+    backend.scroll_hi_res(-50)
+    assert dev.events == [(ib.EV_REL, ib.REL_WHEEL_HI_RES, -50), "SYN"]
+    dev.events.clear()
+    backend.scroll_hi_res(-50)
+    assert (ib.EV_REL, ib.REL_WHEEL, -1) not in dev.events      # 100 of 120 so far
+    backend.scroll_hi_res(-30)                                   # crosses a notch
+    assert (ib.EV_REL, ib.REL_WHEEL_HI_RES, -30) in dev.events
+    assert (ib.EV_REL, ib.REL_WHEEL, -1) in dev.events
+
+
+def test_hi_res_scroll_loses_nothing_in_either_direction(backend, dev):
+    for units in [37, 37, 37, 37, -90, -90, 15] * 5:
+        backend.scroll_hi_res(units)
+    hi = sum(v for e in dev.events if e != "SYN" and e[1] == ib.REL_WHEEL_HI_RES for v in [e[2]])
+    notches = sum(e[2] for e in dev.events if e != "SYN" and e[1] == ib.REL_WHEEL)
+    assert hi == sum([37, 37, 37, 37, -90, -90, 15] * 5)
+    assert abs(hi - notches * 120) < 120                         # remainder < one notch
+
+
+def test_hi_res_zero_sends_nothing(backend, dev):
+    backend.scroll_hi_res(0)
+    assert dev.events == []
+
+
+def test_pyautogui_hi_res_accumulates_fractions_into_whole_clicks(gui_stubs):
+    from modules.input_backend import PyAutoGUIBackend
+
+    pag = PyAutoGUIBackend()
+    for _ in range(5):
+        pag.scroll_hi_res(-30)                                   # 150 units = 1.25 notches
+    gui_stubs.pyautogui.scroll.assert_called_once_with(-1)
+    pag.scroll_hi_res(-90)                                       # 0.25 + 0.75 = 1 more
+    assert gui_stubs.pyautogui.scroll.call_count == 2
+    gui_stubs.pyautogui.scroll.assert_called_with(-1)
