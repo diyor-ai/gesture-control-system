@@ -36,6 +36,7 @@ _LEGEND = [
     "'q'  – Quit",
     "'d'  – Toggle Draw",
     "'r'  – Clear Canvas",
+    "'p'  – Privacy blur",
 ]
 
 
@@ -43,7 +44,7 @@ class UIOverlay:
     def __init__(self, cfg: Config) -> None:
         self._cfg = cfg
 
-    def draw_hud(self, frame: np.ndarray, fps: float, active_mode: str) -> None:
+    def draw_hud(self, frame: np.ndarray, fps: float, active_mode: str, privacy: bool = False) -> None:
         """Render FPS, active mode, and shortcut legend onto the frame."""
         h, w = frame.shape[:2]
         font       = cv2.FONT_HERSHEY_SIMPLEX
@@ -66,6 +67,10 @@ class UIOverlay:
         mode_str   = f"Mode: {active_mode}"
         cv2.putText(frame, mode_str, (w // 2 - 120, 30),
                     font, scale, mode_color, thickness)
+
+        if privacy:
+            cv2.putText(frame, "PRIVACY", (w - 130, 30),
+                        font, scale, (0, 200, 255), 2)
 
         # Legend (bottom-left)
         for i, line in enumerate(_LEGEND):

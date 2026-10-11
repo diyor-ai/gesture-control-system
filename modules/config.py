@@ -55,7 +55,11 @@ class Config:
     # ── Gesture thresholds ────────────────────────────────────────────────────
     # Distances below are in palm lengths (wrist -> middle MCP), so they hold at any camera distance
     CLICK_THRESHOLD        = 0.20          # max thumb-to-fingertip distance for a pinch
-    DOUBLE_CLICK_INTERVAL  = 0.40          # max seconds between two pinch starts (<= OS double-click time)
+    DOUBLE_CLICK_INTERVAL  = 0.60          # max seconds between two pinch starts (a human double-pinch is slower
+                                           # than the OS double-click time; see CursorController.double_click)
+    CLICK_LOCK_TIME        = 0.70          # cursor frozen this long after a click so both pinches hit one pixel
+                                           # (keep >= DOUBLE_CLICK_INTERVAL)
+    FAST_DOUBLE_CLICK_GAP  = 0.05          # seconds between the two clicks sent for a DOUBLE_CLICK
     DRAW_MODE_DISTANCE     = 0.05          # index–middle gap to enter draw mode
     SCREENSHOT_HOLD_TIME   = 1.0           # seconds gesture must be held
     PLAY_PAUSE_HOLD_TIME   = 0.5           # seconds the 3-finger pose must be held
@@ -92,6 +96,10 @@ class Config:
 
     # ── Media keys ────────────────────────────────────────────────────────────
     MEDIA_COOLDOWN         = 1.0           # seconds between media key presses
+
+    # ── Privacy mode (demos) ──────────────────────────────────────────────────
+    PRIVACY_START          = False         # start with the camera image blurred (toggle with 'p')
+    PRIVACY_BLUR_DOWNSCALE = 16            # image is shrunk this many times before blurring (bigger = blurrier)
 
     # ── Hand-loss recovery ────────────────────────────────────────────────────
     HAND_LOSS_GRACE_FRAMES = 5             # frames to wait before resetting state

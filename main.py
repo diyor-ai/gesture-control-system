@@ -76,7 +76,7 @@ def main(debug: bool = False) -> None:
 
     # ── Initialise modules ────────────────────────────────────────────────────
     tracker    = HandTracker(cfg)
-    cursor     = CursorController(cfg, backend)
+    cursor     = CursorController(cfg, backend, debug=debug)
     engine     = GestureEngine(cfg)
     volume     = VolumeController(cfg)
     scroller   = ScrollController(cfg, backend)
@@ -89,6 +89,7 @@ def main(debug: bool = False) -> None:
     overlay    = UIOverlay(cfg)
 
     hand_loss = HandLossGrace(cfg.HAND_LOSS_GRACE_FRAMES)
+    privacy = cfg.PRIVACY_START
 
     # ── FPS tracking ─────────────────────────────────────────────────────────
     prev_time = time.time()
@@ -97,6 +98,7 @@ def main(debug: bool = False) -> None:
     print("[INFO] Gesture Control System started. Press 'q' to quit.")
     print("[INFO] Press 'd' to toggle drawing canvas.")
     print("[INFO] Press 'r' to clear the drawing canvas.")
+    print("[INFO] Press 'p' to toggle privacy mode (blurred camera image).")
 
     try:
         while True:
@@ -112,7 +114,7 @@ def main(debug: bool = False) -> None:
             frame = cv2.flip(frame, 1)
 
             # ── Hand detection & landmark extraction ──────────────────────────────
-            frame, hands_data = tracker.process(frame)
+            frame, hands_data = tracker.process(frame, blur=privacy)
 
             # ── FPS calculation ───────────────────────────────────────────────────
             now = time.time()
@@ -206,7 +208,7 @@ def main(debug: bool = False) -> None:
             frame = canvas.render(frame)
 
             # ── HUD overlay (FPS, active mode, instructions) ──────────────────────
-            overlay.draw_hud(frame, avg_fps, engine.active_mode)
+            overlay.draw_hud(frame, avg_fps, engine.active_mode, privacy)
             if debug:
                 overlay.draw_debug(frame, engine.debug, fps, avg_fps)
 
@@ -220,6 +222,8 @@ def main(debug: bool = False) -> None:
                 canvas.toggle()
             elif key == ord("r"):
                 canvas.clear()
+            elif key == ord("p"):
+                privacy = not privacy
     except KeyboardInterrupt:
         print("\n[INFO] Ctrl+C received, shutting down.")
     finally:

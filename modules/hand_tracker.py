@@ -62,9 +62,11 @@ class HandTracker:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def process(self, frame: np.ndarray) -> Tuple[np.ndarray, List[Dict]]:
+    def process(self, frame: np.ndarray, blur: bool = False) -> Tuple[np.ndarray, List[Dict]]:
         """
-        Run hand detection on a BGR frame.
+        Run hand detection on a BGR frame.  With `blur` the sharp frame is
+        still used for detection, but the returned (and annotated) image is a
+        heavily blurred copy (privacy mode).
 
         Returns
         -------
@@ -80,6 +82,10 @@ class HandTracker:
         rgb.flags.writeable = False
         results = self.hands.process(rgb)
         rgb.flags.writeable = True
+
+        if blur:
+            from modules.privacy import blur_frame
+            frame = blur_frame(frame, self._cfg.PRIVACY_BLUR_DOWNSCALE)
 
         hands_data: List[Dict] = []
         h, w = frame.shape[:2]

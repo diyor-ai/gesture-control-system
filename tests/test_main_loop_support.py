@@ -63,10 +63,10 @@ def test_zoom_reset_forgets_the_previous_pinch_distance(gui_stubs):
     gui_stubs.pyautogui.scroll.assert_not_called()
 
 
-def test_clicks_do_not_move_the_pointer_and_double_click_adds_one_click(gui_stubs):
+def test_clicks_do_not_move_the_pointer_and_double_click_sends_a_fast_pair(gui_stubs):
     from modules.cursor_controller import CursorController
 
-    cursor = CursorController(Config())
+    cursor = CursorController(Config(), sleep=lambda s: None)
     hand = _hand_at()
     cursor.click(hand)
     cursor.right_click(hand)
@@ -76,7 +76,7 @@ def test_clicks_do_not_move_the_pointer_and_double_click_adds_one_click(gui_stub
 
     gui_stubs.pyautogui.click.reset_mock()
     cursor.double_click(hand)
-    gui_stubs.pyautogui.click.assert_called_once()
+    assert gui_stubs.pyautogui.click.call_count == 2          # a fast pair, see test_click_lock.py
     gui_stubs.pyautogui.doubleClick.assert_not_called()
 
 
