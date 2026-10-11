@@ -85,6 +85,9 @@ class Config:
     DRAW_THICKNESS         = 4
     DRAW_ERASER_RADIUS     = 30
 
+    # ── Window ────────────────────────────────────────────────────────────────
+    WINDOW_SCALE           = 1.5           # initial window size = frame size x this (640x480 -> 960x720)
+
     # ── UI overlay ────────────────────────────────────────────────────────────
     HUD_FONT               = 0             # cv2.FONT_HERSHEY_SIMPLEX (numeric so config needs no OpenCV)
     HUD_SCALE              = 0.65

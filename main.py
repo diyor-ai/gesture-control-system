@@ -30,10 +30,22 @@ from modules.media_control import MediaController
 from modules.brightness_control import BrightnessController
 from modules.ui_overlay import UIOverlay
 from modules.config import Config
+from modules.window import letterbox, window_size
 from modules.input_backend import InputBackendError, create_backend
 
 
 WINDOW_NAME = "Gesture Control System"
+
+
+def _fit_to_window(frame):
+    """Letterbox the frame into the current window with a dark background (never white bars)."""
+    try:
+        _, _, win_w, win_h = cv2.getWindowImageRect(WINDOW_NAME)
+    except cv2.error:
+        return frame
+    if win_w <= 0 or win_h <= 0:
+        return frame
+    return letterbox(frame, win_w, win_h)
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -63,8 +75,10 @@ def main(debug: bool = False) -> None:
         print("[ERROR] Cannot open camera. Check CAMERA_INDEX in config.py.")
         sys.exit(1)
 
-    # WINDOW_GUI_NORMAL drops OpenCV's Qt toolbar and status bar (camera view + HUD only)
-    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
+    # WINDOW_GUI_NORMAL drops OpenCV's Qt toolbar and status bar (camera view + HUD only);
+    # WINDOW_KEEPRATIO stops the image being stretched when the window is resized.
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_KEEPRATIO)
+    window_sized = False
 
     # ── Input injection (uinput on Wayland, PyAutoGUI elsewhere) ─────────────
     try:
@@ -213,6 +227,11 @@ def main(debug: bool = False) -> None:
             if debug:
                 overlay.draw_debug(frame, engine.debug, fps, avg_fps)
 
+            if not window_sized:
+                # Size the window from the real first frame, not the requested resolution
+                cv2.resizeWindow(WINDOW_NAME, *window_size(frame.shape, cfg.WINDOW_SCALE))
+                window_sized = True
+            frame = _fit_to_window(frame)
             cv2.imshow(WINDOW_NAME, frame)
 
             # ── Keyboard shortcuts ────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import os
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 
 from modules import quiet_logs
@@ -17,16 +18,21 @@ def test_ctrl_c_releases_everything_and_exits_cleanly(gui_stubs, monkeypatch, ca
     cv2.waitKey.side_effect = KeyboardInterrupt        # user presses Ctrl+C
     backend = MagicMock()
     tracker = MagicMock()
-    tracker.process.return_value = (MagicMock(), [])
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.getWindowImageRect.return_value = (0, 0, 0, 0)     # no window: skip letterboxing
+    tracker.process.return_value = (frame, [])
     volume, brightness = MagicMock(), MagicMock()
     monkeypatch.setattr(main, "create_backend", lambda cfg: backend)
-    monkeypatch.setattr(main, "read_frame", lambda *a: MagicMock())
+    monkeypatch.setattr(main, "read_frame", lambda *a: frame)
     monkeypatch.setattr(main, "HandTracker", lambda cfg: tracker)
     monkeypatch.setattr(main, "VolumeController", lambda cfg: volume)
     monkeypatch.setattr(main, "BrightnessController", lambda cfg: brightness)
     for name in ("CursorController", "ScrollController", "ScreenshotModule", "ZoomController",
                  "MediaController", "UIOverlay", "DrawingCanvas"):
         monkeypatch.setattr(main, name, lambda *a, **k: MagicMock())
+    canvas = MagicMock()
+    canvas.render.return_value = frame
+    monkeypatch.setattr(main, "DrawingCanvas", lambda *a, **k: canvas)
 
     main.main()                                         # must not raise
 
